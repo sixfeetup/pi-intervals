@@ -33,6 +33,17 @@ Credentials and settings are resolved in this order:
 | `INTERVALS_PERSON_ID` | Your Intervals person ID (required for time-entry sync) |
 | `PI_INTERVALS_HOME` | Override the default local storage path (`~/.pi/intervals/`) |
 
+### `config.json` keys
+
+If you prefer file-based configuration, create `config.json` inside `PI_INTERVALS_HOME` (or `~/.pi/intervals/`):
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `apiKey` | `string` | Intervals API key for HTTP Basic auth |
+| `baseUrl` | `string` | Intervals API base URL (default: `https://api.myintervals.com/`) |
+| `personId` | `number` | Your Intervals person ID (required for time-entry sync) |
+| `syncIntervalMs` | `number` | Background sync interval in milliseconds |
+
 ### Interactive setup
 
 Run `/intervals-setup` inside pi to save credentials to the local config file and perform an initial project catalog sync.
@@ -41,7 +52,7 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 
 - **Timers are local-only.** Starting a timer writes a lightweight local row with just a description. Project, worktype, and module hints are optional.
 - **Stop/apply creates a time entry.** When you stop a timer, you provide (or resolve) the project and worktype. The extension creates a pending time entry and immediately tries to sync it to Intervals.
-- **Time entries are local-first.** `add_time`, `edit_time`, and `stop_timer` all persist to SQLite before any network call. If sync fails, the entry stays local with a `failed` or `pending` status and can be retried.
+- **Time entries are local-first.** `intervals_add_time`, `intervals_edit_time`, and `intervals_stop_timer` all persist to SQLite before any network call. If sync fails, the entry stays local with a `failed` or `pending` status and can be retried.
 - **Reports are local-only.** `query_time` and `/intervals-time` read from SQLite and never call the Intervals API.
 
 ## Slash commands
