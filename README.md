@@ -1,0 +1,73 @@
+# pi-intervals
+
+A pi extension for local-first Intervals time tracking.
+
+Timers and time entries are captured in a local SQLite database first, then synced to Intervals in the background or on demand. Queries and reports are always local-only and never call the Intervals API.
+
+## Install / develop
+
+```bash
+npm install
+npm run check
+```
+
+Load the extension in pi:
+
+```bash
+pi -e ./src/index.ts
+```
+
+## Configuration
+
+Credentials and settings are resolved in this order:
+
+1. Environment variables
+2. `config.json` inside `PI_INTERVALS_HOME` (or `~/.pi/intervals/`)
+
+### Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `INTERVALS_API_KEY` | Intervals API key for HTTP Basic auth |
+| `INTERVALS_BASE_URL` | Intervals API base URL (default: `https://api.myintervals.com/`) |
+| `INTERVALS_PERSON_ID` | Your Intervals person ID (required for time-entry sync) |
+| `PI_INTERVALS_HOME` | Override the default local storage path (`~/.pi/intervals/`) |
+
+### Interactive setup
+
+Run `/intervals-setup` inside pi to save credentials to the local config file and perform an initial project catalog sync.
+
+## How it works
+
+- **Timers are local-only.** Starting a timer writes a lightweight local row with just a description. Project, worktype, and module hints are optional.
+- **Stop/apply creates a time entry.** When you stop a timer, you provide (or resolve) the project and worktype. The extension creates a pending time entry and immediately tries to sync it to Intervals.
+- **Time entries are local-first.** `add_time`, `edit_time`, and `stop_timer` all persist to SQLite before any network call. If sync fails, the entry stays local with a `failed` or `pending` status and can be retried.
+- **Reports are local-only.** `query_time` and `/intervals-time` read from SQLite and never call the Intervals API.
+
+## Slash commands
+
+| Command | Description |
+|---------|-------------|
+| `/intervals-setup` | Configure credentials and run initial project sync |
+| `/intervals-sync-projects` | Refresh local catalog of clients, projects, worktypes, and modules |
+| `/intervals-sync-now` | Retry pending time-entry sync immediately |
+| `/intervals-status` | Show DB path, credential source, active timers, pending sync count, and last project sync |
+| `/intervals-timers` | Show active or recent timers |
+| `/intervals-time <range>` | Query local time entries (`today`, `this-week`, `last-week`, `this-month`, `last-month`, or `YYYY-MM-DD..YYYY-MM-DD`) |
+| `/intervals-time edit <id> [field=value ...]` | Edit a local time entry from the command line |
+| `/intervals-project-defaults <project_id> <worktype_id> [module_id]` | Set default worktype and module for a project |
+
+## Agent tools
+
+| Tool | Description |
+|------|-------------|
+| `intervals_find_project_context` | Search the local project catalog for IDs and classifications (local-only) |
+| `intervals_start_timer` | Start a local timer with a simple description; project/worktype/module are optional |
+| `intervals_stop_timer` | Stop a timer, resolve classification, create a pending time entry, and sync |
+| `intervals_add_time` | Add a completed time entry directly (duration in minutes) |
+| `intervals_edit_time` | Edit an existing local time entry, mark it pending, and re-sync |
+| `intervals_query_time` | Report time entries by date range and project filter (local-only) |
+| `intervals_list_timers` | List active or recent local timers |
+| `intervals_list_time` | List recent local time entries with sync status |
+| `intervals_set_project_defaults` | Configure default worktype/module for a project |
+| `intervals_sync_now` | Immediately retry syncing pending time entries to Intervals |
