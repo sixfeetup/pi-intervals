@@ -3,7 +3,7 @@ import type { CatalogStore } from "./catalog-store.js";
 import type { Db } from "./db.js";
 import { resolveDateRange } from "./date-ranges.js";
 import type { ProjectDefaultsStore } from "./project-defaults-store.js";
-import type { TimeEntry, TimeEntryStore } from "./time-entry-store.js";
+import type { TimeEntry, TimeEntryStore, UpdateTimeEntryInput } from "./time-entry-store.js";
 import type { TimeRange } from "./types.js";
 
 export interface AddTimeInput {
@@ -13,6 +13,20 @@ export interface AddTimeInput {
   date: string;
   durationSeconds: number;
   description?: string;
+  billable?: boolean;
+}
+
+export interface EditTimeInput {
+  localId: string;
+  projectId?: number;
+  projectQuery?: string;
+  worktypeId?: number;
+  moduleId?: number | null;
+  date?: string;
+  startAt?: string | null;
+  endAt?: string | null;
+  durationSeconds?: number;
+  description?: string | null;
   billable?: boolean;
 }
 
@@ -78,6 +92,57 @@ export class TimeService {
       createdAt: now,
       updatedAt: now,
     });
+  }
+
+  editTime(input: EditTimeInput): TimeEntry {
+    const existing = this.deps.timeEntryStore.getTimeEntry(input.localId);
+    if (!existing) {
+      throw new Error(`time entry not found: ${input.localId}`);
+    }
+
+    let projectId = existing.projectId;
+    if (input.projectQuery != null) {
+      const matches = this.deps.catalogStore.searchProjectContext({ query: input.projectQuery, limit: 5 });
+      if (matches.length === 0) {
+        throw new Error(`no project found for query: ${input.projectQuery}`);
+      }
+      if (matches.length > 1) {
+        throw new Error(`project query is ambiguous: ${input.projectQuery} (${matches.length} matches)`);
+      }
+      projectId = matches[0].projectId;
+    } else if (input.projectId !== undefined) {
+      projectId = input.projectId;
+    }
+
+    const projectChanged = projectId !== existing.projectId;
+
+    let worktypeId: number | undefined = input.worktypeId;
+    if (worktypeId === undefined && projectChanged) {
+      const resolved = this.deps.defaultsStore.resolveForProject({ projectId });
+      if (resolved.worktypeId == null) {
+        throw new Error("worktype is required");
+      }
+      worktypeId = resolved.worktypeId;
+    }
+
+    let moduleId: number | null | undefined = input.moduleId;
+    if (moduleId === undefined && projectChanged) {
+      const resolved = this.deps.defaultsStore.resolveForProject({ projectId });
+      moduleId = resolved.moduleId;
+    }
+
+    const patch: UpdateTimeEntryInput = {};
+    if (projectChanged) patch.projectId = projectId;
+    if (worktypeId !== undefined) patch.worktypeId = worktypeId;
+    if (moduleId !== undefined) patch.moduleId = moduleId;
+    if (input.date !== undefined) patch.date = input.date;
+    if (input.startAt !== undefined) patch.startAt = input.startAt;
+    if (input.endAt !== undefined) patch.endAt = input.endAt;
+    if (input.durationSeconds !== undefined) patch.durationSeconds = input.durationSeconds;
+    if (input.description !== undefined) patch.description = input.description;
+    if (input.billable !== undefined) patch.billable = input.billable;
+
+    return this.deps.timeEntryStore.updateTimeEntry(input.localId, patch);
   }
 
   queryTime(input: QueryTimeInput): TimeReport {

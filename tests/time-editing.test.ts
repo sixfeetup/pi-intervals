@@ -1,0 +1,462 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { CatalogStore } from "../src/catalog-store.js";
+import { openDatabase } from "../src/db.js";
+import { ProjectDefaultsStore } from "../src/project-defaults-store.js";
+import { TimeEntryStore } from "../src/time-entry-store.js";
+import { TimeService } from "../src/time-service.js";
+
+function setup() {
+  const dir = mkdtempSync(join(tmpdir(), "pi-intervals-edit-"));
+  const db = openDatabase(join(dir, "intervals.db"));
+  const catalog = new CatalogStore(db);
+  const defaults = new ProjectDefaultsStore(db);
+  const timeEntries = new TimeEntryStore(db);
+  const service = new TimeService({ db, timeEntryStore: timeEntries, catalogStore: catalog, defaultsStore: defaults });
+  return { dir, db, catalog, defaults, timeEntries, service };
+}
+
+function teardown(dir: string) {
+  rmSync(dir, { recursive: true, force: true });
+}
+
+test("editTime updates duration and description and marks pending", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [{ id: 10, clientId: 1, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Development", active: true, raw: {} }],
+      modules: [{ id: 200, projectId: 10, moduleId: 7, name: "Backend", active: true, raw: {} }],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5, defaultModuleId: 7 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+    assert.equal(entry.syncStatus, "pending");
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      durationSeconds: 3600,
+      description: "Revised implementation work",
+    });
+
+    assert.equal(edited.durationSeconds, 3600);
+    assert.equal(edited.description, "Revised implementation work");
+    assert.equal(edited.syncStatus, "pending");
+    assert.equal(edited.projectId, 10);
+    assert.equal(edited.worktypeId, 5);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime preserves remoteId and marks syncStatus pending", () => {
+  const { dir, db, catalog, defaults, timeEntries, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} }],
+      modules: [],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    timeEntries.setRemoteTime(entry.localId, 999);
+    const synced = timeEntries.getTimeEntry(entry.localId)!;
+    assert.equal(synced.remoteId, 999);
+    assert.equal(synced.syncStatus, "synced");
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      durationSeconds: 3600,
+    });
+
+    assert.equal(edited.remoteId, 999);
+    assert.equal(edited.syncStatus, "pending");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime clears lastSyncError on edit", () => {
+  const { dir, db, catalog, defaults, timeEntries, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} }],
+      modules: [],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    timeEntries.markSyncFailed(entry.localId, "network timeout");
+    const failed = timeEntries.getTimeEntry(entry.localId)!;
+    assert.equal(failed.syncStatus, "failed");
+    assert.equal(failed.lastSyncError, "network timeout");
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      description: "Fixed",
+    });
+
+    assert.equal(edited.syncStatus, "pending");
+    assert.equal(edited.lastSyncError, undefined);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime updates updated_at", async () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} }],
+      modules: [],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    await new Promise((r) => setTimeout(r, 15));
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      durationSeconds: 3600,
+    });
+
+    assert.ok(edited.updatedAt > entry.updatedAt, "updated_at should increase");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime resolves projectQuery to unambiguous project", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [
+        { id: 10, clientId: 1, name: "Website", active: true, billable: true, raw: {} },
+        { id: 11, clientId: 1, name: "App", active: true, billable: true, raw: {} },
+      ],
+      worktypes: [
+        { id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} },
+        { id: 101, projectId: 11, worktypeId: 6, name: "Design", active: true, raw: {} },
+      ],
+      modules: [],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5 });
+    defaults.setProjectDefaults({ projectId: 11, defaultWorktypeId: 6 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      projectQuery: "app",
+    });
+
+    assert.equal(edited.projectId, 11);
+    assert.equal(edited.worktypeId, 6);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime throws when projectQuery is ambiguous", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [
+        { id: 10, clientId: 1, name: "Website", active: true, billable: true, raw: {} },
+        { id: 11, clientId: 1, name: "Web App", active: true, billable: true, raw: {} },
+      ],
+      worktypes: [],
+      modules: [],
+    });
+
+    const entry = service.addTime({
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    assert.throws(
+      () => service.editTime({ localId: entry.localId, projectQuery: "web" }),
+      /ambiguous/
+    );
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime throws when projectQuery resolves nothing", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [],
+      modules: [],
+    });
+
+    const entry = service.addTime({
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    assert.throws(
+      () => service.editTime({ localId: entry.localId, projectQuery: "nomatch" }),
+      /no project found/
+    );
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime uses new project default worktype when project changes and worktypeId omitted", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [
+        { id: 10, name: "Website", active: true, billable: true, raw: {} },
+        { id: 11, name: "App", active: true, billable: true, raw: {} },
+      ],
+      worktypes: [
+        { id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} },
+        { id: 101, projectId: 11, worktypeId: 6, name: "Design", active: true, raw: {} },
+      ],
+      modules: [],
+    });
+    defaults.setProjectDefaults({ projectId: 11, defaultWorktypeId: 6 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      projectId: 11,
+    });
+
+    assert.equal(edited.projectId, 11);
+    assert.equal(edited.worktypeId, 6);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime throws worktype is required when project changes and no default exists", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [
+        { id: 10, name: "Website", active: true, billable: true, raw: {} },
+        { id: 11, name: "App", active: true, billable: true, raw: {} },
+      ],
+      worktypes: [
+        { id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} },
+        { id: 101, projectId: 11, worktypeId: 6, name: "Design", active: true, raw: {} },
+      ],
+      modules: [],
+    });
+    // No defaults for project 11
+
+    const entry = service.addTime({
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    assert.throws(
+      () => service.editTime({ localId: entry.localId, projectId: 11 }),
+      /worktype is required/
+    );
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime allows explicit worktypeId when project changes", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [
+        { id: 10, name: "Website", active: true, billable: true, raw: {} },
+        { id: 11, name: "App", active: true, billable: true, raw: {} },
+      ],
+      worktypes: [
+        { id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} },
+        { id: 101, projectId: 11, worktypeId: 6, name: "Design", active: true, raw: {} },
+      ],
+      modules: [],
+    });
+
+    const entry = service.addTime({
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      projectId: 11,
+      worktypeId: 6,
+    });
+
+    assert.equal(edited.projectId, 11);
+    assert.equal(edited.worktypeId, 6);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime allows null moduleId to clear module", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} }],
+      modules: [{ id: 200, projectId: 10, moduleId: 7, name: "Backend", active: true, raw: {} }],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5, defaultModuleId: 7 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+    assert.equal(entry.moduleId, 7);
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      moduleId: null,
+    });
+
+    assert.equal(edited.moduleId, undefined);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime allows all editable fields at once", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [
+        { id: 10, clientId: 1, name: "Website", active: true, billable: true, raw: {} },
+        { id: 11, clientId: 1, name: "App", active: true, billable: true, raw: {} },
+      ],
+      worktypes: [
+        { id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} },
+        { id: 101, projectId: 11, worktypeId: 6, name: "Design", active: true, raw: {} },
+      ],
+      modules: [
+        { id: 200, projectId: 10, moduleId: 7, name: "Backend", active: true, raw: {} },
+        { id: 201, projectId: 11, moduleId: 8, name: "Frontend", active: true, raw: {} },
+      ],
+    });
+    defaults.setProjectDefaults({ projectId: 11, defaultWorktypeId: 6, defaultModuleId: 8 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      worktypeId: 5,
+      moduleId: 7,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+      billable: true,
+    });
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      projectId: 11,
+      worktypeId: 6,
+      moduleId: 8,
+      date: "2026-04-25",
+      startAt: "10:00",
+      endAt: "11:00",
+      durationSeconds: 3600,
+      description: "Revised",
+      billable: false,
+    });
+
+    assert.equal(edited.projectId, 11);
+    assert.equal(edited.worktypeId, 6);
+    assert.equal(edited.moduleId, 8);
+    assert.equal(edited.date, "2026-04-25");
+    assert.equal(edited.startAt, "10:00");
+    assert.equal(edited.endAt, "11:00");
+    assert.equal(edited.durationSeconds, 3600);
+    assert.equal(edited.description, "Revised");
+    assert.equal(edited.billable, false);
+    assert.equal(edited.syncStatus, "pending");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
