@@ -28,7 +28,7 @@ export class TimerService {
     private readonly timerStore: TimerStore,
     private readonly timeEntryStore: TimeEntryStore,
     private readonly defaultsStore: ProjectDefaultsStore,
-    private readonly catalogStore: CatalogStore,
+    private readonly _catalogStore: CatalogStore,
   ) {}
 
   startTimer(input: StartTimerInput): Timer {
@@ -72,23 +72,25 @@ export class TimerService {
 
     const moduleId = resolved.moduleId;
 
-    this.timerStore.markTimerStopped(timer.localId, stoppedAt, elapsedSeconds);
+    return this.timerStore.transaction(() => {
+      this.timerStore.markTimerStopped(timer.localId, stoppedAt, elapsedSeconds);
 
-    const entry = this.timeEntryStore.insertTimeEntry({
-      localId: randomUUID(),
-      sourceTimerId: timer.localId,
-      projectId,
-      worktypeId,
-      moduleId,
-      date: stoppedAt.slice(0, 10),
-      durationSeconds: elapsedSeconds,
-      description: input.description ?? timer.description,
-      billable: input.billable,
-      createdAt: stoppedAt,
-      updatedAt: stoppedAt,
+      return this.timeEntryStore.insertTimeEntry({
+        localId: randomUUID(),
+        sourceTimerId: timer.localId,
+        projectId,
+        worktypeId,
+        moduleId,
+        date: stoppedAt.slice(0, 10),
+        startAt: timer.startedAt,
+        endAt: stoppedAt,
+        durationSeconds: elapsedSeconds,
+        description: input.description ?? timer.description,
+        billable: input.billable,
+        createdAt: stoppedAt,
+        updatedAt: stoppedAt,
+      });
     });
-
-    return entry;
   }
 
   listActive(): Timer[] {

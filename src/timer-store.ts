@@ -165,7 +165,11 @@ export class TimerStore {
         state = 'stopped',
         updated_at = ?
       where local_id = ?`
-    ).run(stoppedAt, elapsedSeconds, new Date().toISOString(), localId);
+    ).run(stoppedAt, elapsedSeconds, stoppedAt, localId);
+  }
+
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
   }
 
   private mapRow(row: {

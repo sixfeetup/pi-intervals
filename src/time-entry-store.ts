@@ -39,6 +39,58 @@ export interface InsertTimeEntryInput {
   updatedAt: string;
 }
 
+export interface UpdateTimeEntryInput {
+  projectId?: number;
+  worktypeId?: number;
+  moduleId?: number | null;
+  date?: string;
+  startAt?: string | null;
+  endAt?: string | null;
+  durationSeconds?: number;
+  description?: string | null;
+  billable?: boolean;
+}
+
+type TimeEntryRow = {
+  localId: string;
+  remoteId: number | null;
+  sourceTimerId: string | null;
+  projectId: number;
+  worktypeId: number;
+  moduleId: number | null;
+  date: string;
+  startAt: string | null;
+  endAt: string | null;
+  durationSeconds: number;
+  description: string | null;
+  billable: number;
+  syncStatus: SyncStatus;
+  syncAttempts: number;
+  lastSyncError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const selectColumns = `select
+  local_id as localId,
+  remote_id as remoteId,
+  source_timer_id as sourceTimerId,
+  project_id as projectId,
+  worktype_id as worktypeId,
+  module_id as moduleId,
+  date,
+  start_at as startAt,
+  end_at as endAt,
+  duration_seconds as durationSeconds,
+  description,
+  billable,
+  sync_status as syncStatus,
+  sync_attempts as syncAttempts,
+  last_sync_error as lastSyncError,
+  created_at as createdAt,
+  updated_at as updatedAt
+from time_entries`;
+
 export class TimeEntryStore {
   constructor(private readonly db: Db) {}
 
@@ -74,113 +126,105 @@ export class TimeEntryStore {
   }
 
   getTimeEntry(localId: string): TimeEntry | undefined {
-    const row = this.db.prepare(
-      `select
-        local_id as localId,
-        remote_id as remoteId,
-        source_timer_id as sourceTimerId,
-        project_id as projectId,
-        worktype_id as worktypeId,
-        module_id as moduleId,
-        date,
-        start_at as startAt,
-        end_at as endAt,
-        duration_seconds as durationSeconds,
-        description,
-        billable,
-        sync_status as syncStatus,
-        sync_attempts as syncAttempts,
-        last_sync_error as lastSyncError,
-        created_at as createdAt,
-        updated_at as updatedAt
-      from time_entries where local_id = ?`
-    ).get(localId) as
-      | {
-          localId: string;
-          remoteId: number | null;
-          sourceTimerId: string | null;
-          projectId: number;
-          worktypeId: number;
-          moduleId: number | null;
-          date: string;
-          startAt: string | null;
-          endAt: string | null;
-          durationSeconds: number;
-          description: string | null;
-          billable: number;
-          syncStatus: SyncStatus;
-          syncAttempts: number;
-          lastSyncError: string | null;
-          createdAt: string;
-          updatedAt: string;
-        }
-      | undefined;
+    const row = this.db.prepare(`${selectColumns} where local_id = ?`).get(localId) as TimeEntryRow | undefined;
     if (!row) return undefined;
     return this.mapRow(row);
   }
 
   listRecent({ limit = 20 }: { limit?: number } = {}): TimeEntry[] {
-    const rows = this.db.prepare(
-      `select
-        local_id as localId,
-        remote_id as remoteId,
-        source_timer_id as sourceTimerId,
-        project_id as projectId,
-        worktype_id as worktypeId,
-        module_id as moduleId,
-        date,
-        start_at as startAt,
-        end_at as endAt,
-        duration_seconds as durationSeconds,
-        description,
-        billable,
-        sync_status as syncStatus,
-        sync_attempts as syncAttempts,
-        last_sync_error as lastSyncError,
-        created_at as createdAt,
-        updated_at as updatedAt
-      from time_entries order by updated_at desc limit ?`
-    ).all(limit) as Array<{
-      localId: string;
-      remoteId: number | null;
-      sourceTimerId: string | null;
-      projectId: number;
-      worktypeId: number;
-      moduleId: number | null;
-      date: string;
-      startAt: string | null;
-      endAt: string | null;
-      durationSeconds: number;
-      description: string | null;
-      billable: number;
-      syncStatus: SyncStatus;
-      syncAttempts: number;
-      lastSyncError: string | null;
-      createdAt: string;
-      updatedAt: string;
-    }>;
+    const rows = this.db.prepare(`${selectColumns} order by updated_at desc limit ?`).all(limit) as TimeEntryRow[];
     return rows.map((r) => this.mapRow(r));
   }
 
-  private mapRow(row: {
-    localId: string;
-    remoteId: number | null;
-    sourceTimerId: string | null;
-    projectId: number;
-    worktypeId: number;
-    moduleId: number | null;
-    date: string;
-    startAt: string | null;
-    endAt: string | null;
-    durationSeconds: number;
-    description: string | null;
-    billable: number;
-    syncStatus: SyncStatus;
-    syncAttempts: number;
-    lastSyncError: string | null;
-    createdAt: string;
-    updatedAt: string;
-  }): TimeEntry {
+  updateTimeEntry(localId: string, patch: UpdateTimeEntryInput): TimeEntry {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (patch.projectId !== undefined) {
+      sets.push("project_id = ?");
+      params.push(patch.projectId);
+    }
+    if (patch.worktypeId !== undefined) {
+      sets.push("worktype_id = ?");
+      params.push(patch.worktypeId);
+    }
+    if (patch.moduleId !== undefined) {
+      sets.push("module_id = ?");
+      params.push(patch.moduleId);
+    }
+    if (patch.date !== undefined) {
+      sets.push("date = ?");
+      params.push(patch.date);
+    }
+    if (patch.startAt !== undefined) {
+      sets.push("start_at = ?");
+      params.push(patch.startAt);
+    }
+    if (patch.endAt !== undefined) {
+      sets.push("end_at = ?");
+      params.push(patch.endAt);
+    }
+    if (patch.durationSeconds !== undefined) {
+      sets.push("duration_seconds = ?");
+      params.push(patch.durationSeconds);
+    }
+    if (patch.description !== undefined) {
+      sets.push("description = ?");
+      params.push(patch.description);
+    }
+    if (patch.billable !== undefined) {
+      sets.push("billable = ?");
+      params.push(patch.billable ? 1 : 0);
+    }
+
+    sets.push("sync_status = 'pending'");
+    sets.push("last_sync_error = null");
+
+    const updatedAt = new Date().toISOString();
+    sets.push("updated_at = ?");
+    params.push(updatedAt);
+    params.push(localId);
+
+    this.db.prepare(`update time_entries set ${sets.join(", ")} where local_id = ?`).run(...params);
+    return this.getTimeEntry(localId)!;
+  }
+
+  queryTime({ startDate, endDate, projectId }: { startDate: string; endDate: string; projectId?: number }): TimeEntry[] {
+    let sql = `${selectColumns} where date between ? and ?`;
+    const params: unknown[] = [startDate, endDate];
+    if (projectId !== undefined) {
+      sql += " and project_id = ?";
+      params.push(projectId);
+    }
+    sql += " order by date desc, updated_at desc";
+    const rows = this.db.prepare(sql).all(...params) as TimeEntryRow[];
+    return rows.map((r) => this.mapRow(r));
+  }
+
+  pendingForSync(limit = 20): TimeEntry[] {
+    const rows = this.db
+      .prepare(`${selectColumns} where sync_status in ('pending', 'failed') order by updated_at desc limit ?`)
+      .all(limit) as TimeEntryRow[];
+    return rows.map((r) => this.mapRow(r));
+  }
+
+  setRemoteTime(localId: string, remoteId: number): void {
+    this.db
+      .prepare(
+        `update time_entries set remote_id = ?, sync_status = 'synced', sync_attempts = 0, last_sync_error = null, updated_at = ? where local_id = ?`
+      )
+      .run(remoteId, new Date().toISOString(), localId);
+  }
+
+  markSyncFailed(localId: string, error: string): void {
+    this.db
+      .prepare(
+        `update time_entries set sync_status = 'failed', sync_attempts = sync_attempts + 1, last_sync_error = ?, updated_at = ? where local_id = ?`
+      )
+      .run(error, new Date().toISOString(), localId);
+  }
+
+  private mapRow(row: TimeEntryRow): TimeEntry {
     return {
       localId: row.localId,
       remoteId: row.remoteId ?? undefined,

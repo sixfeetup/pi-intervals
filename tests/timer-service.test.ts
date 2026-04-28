@@ -107,6 +107,8 @@ test("stopTimer by localId creates pending time entry and stops timer", () => {
     assert.equal(entry.sourceTimerId, first.localId);
     assert.equal(entry.syncStatus, "pending");
     assert.equal(entry.description, "A");
+    assert.equal(entry.startAt, first.startedAt);
+    assert.equal(entry.endAt, "2026-04-24T10:30:00.000Z");
   } finally {
     teardown(dir, db);
   }
