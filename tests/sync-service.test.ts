@@ -148,18 +148,36 @@ test("syncPending marks all rows failed when personId is missing", async () => {
       createdAt: "2026-04-24T10:00:00Z",
       updatedAt: "2026-04-24T10:00:00Z",
     });
+    timeRepo.insertTimeEntry({
+      localId: "entry-3-update",
+      remoteId: 42,
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 3600,
+      description: "No person update",
+      syncStatus: "pending",
+      createdAt: "2026-04-24T10:00:00Z",
+      updatedAt: "2026-04-24T10:00:00Z",
+    });
 
-    const { api, createCalls } = makeApi({});
+    const { api, createCalls, updateCalls } = makeApi({});
     const result = await syncPending({ timeRepo, api, personId: undefined, limit: 10 });
 
     assert.equal(result.timeEntriesCreated, 0);
     assert.equal(result.timeEntriesUpdated, 0);
-    assert.equal(result.failed, 1);
+    assert.equal(result.failed, 2);
     assert.equal(createCalls.length, 0);
+    assert.equal(updateCalls.length, 0);
 
     const updated = timeRepo.getTimeEntry("entry-3")!;
     assert.equal(updated.syncStatus, "failed");
     assert.ok(updated.lastSyncError?.includes("personId"));
+
+    const updateRow = timeRepo.getTimeEntry("entry-3-update")!;
+    assert.equal(updateRow.syncStatus, "failed");
+    assert.equal(updateRow.remoteId, 42);
+    assert.ok(updateRow.lastSyncError?.includes("personId"));
   } finally {
     db.close();
     teardown(dir);
@@ -249,6 +267,58 @@ test("syncPending extracts remote id from time.id wrapper", async () => {
   }
 });
 
+test("syncPending extracts remote id from string id", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    timeRepo.insertTimeEntry({
+      localId: "entry-str",
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 3600,
+      syncStatus: "pending",
+      createdAt: "2026-04-24T10:00:00Z",
+      updatedAt: "2026-04-24T10:00:00Z",
+    });
+
+    const { api } = makeApi({ createResult: { id: "88" } });
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10 });
+
+    assert.equal(result.timeEntriesCreated, 1);
+    const updated = timeRepo.getTimeEntry("entry-str")!;
+    assert.equal(updated.remoteId, 88);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("syncPending extracts remote id from string time.id wrapper", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    timeRepo.insertTimeEntry({
+      localId: "entry-str-wrap",
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 3600,
+      syncStatus: "pending",
+      createdAt: "2026-04-24T10:00:00Z",
+      updatedAt: "2026-04-24T10:00:00Z",
+    });
+
+    const { api } = makeApi({ createResult: { time: { id: "89" } } });
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10 });
+
+    assert.equal(result.timeEntriesCreated, 1);
+    const updated = timeRepo.getTimeEntry("entry-str-wrap")!;
+    assert.equal(updated.remoteId, 89);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("syncPending includes failed entries in retry", async () => {
   const { dir, db, timeRepo } = setup();
   try {
@@ -271,6 +341,40 @@ test("syncPending includes failed entries in retry", async () => {
     const updated = timeRepo.getTimeEntry("entry-5")!;
     assert.equal(updated.remoteId, 88);
     assert.equal(updated.syncStatus, "synced");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("syncPending redacts Basic tokens in sync errors", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    timeRepo.insertTimeEntry({
+      localId: "entry-redact",
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 3600,
+      syncStatus: "pending",
+      createdAt: "2026-04-24T10:00:00Z",
+      updatedAt: "2026-04-24T10:00:00Z",
+    });
+
+    const api = {
+      createResource: async () => {
+        throw new Error("Request failed: Authorization: Basic dXNlcjpwYXNz");
+      },
+      updateResource: async () => ({ }),
+    };
+
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10 });
+    assert.equal(result.failed, 1);
+
+    const row = timeRepo.getTimeEntry("entry-redact")!;
+    assert.equal(row.syncStatus, "failed");
+    assert.ok(row.lastSyncError?.includes("Basic [redacted]"));
+    assert.ok(!row.lastSyncError?.includes("dXNlcjpwYXNz"));
   } finally {
     db.close();
     teardown(dir);

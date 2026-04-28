@@ -66,7 +66,7 @@ export async function syncPending(options: SyncPendingOptions): Promise<SyncPend
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      timeRepo.markSyncFailed(entry.localId, message);
+      timeRepo.markSyncFailed(entry.localId, sanitizeSyncError(message));
       failed++;
     }
   }
@@ -78,12 +78,27 @@ function extractRemoteId(response: unknown): number | undefined {
   if (response == null) return undefined;
   if (typeof response === "object") {
     const obj = response as Record<string, unknown>;
-    if (typeof obj.id === "number") return obj.id;
+    const top = toNumber(obj.id);
+    if (top != null) return top;
     const nested = obj.time;
     if (nested != null && typeof nested === "object") {
       const timeObj = nested as Record<string, unknown>;
-      if (typeof timeObj.id === "number") return timeObj.id;
+      const nestedId = toNumber(timeObj.id);
+      if (nestedId != null) return nestedId;
     }
   }
   return undefined;
+}
+
+function toNumber(val: unknown): number | undefined {
+  if (typeof val === "number") return val;
+  if (typeof val === "string") {
+    const parsed = Number(val);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function sanitizeSyncError(message: string): string {
+  return message.replace(/Basic\s+[A-Za-z0-9+/=]+/g, "Basic [redacted]");
 }
