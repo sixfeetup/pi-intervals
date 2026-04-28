@@ -1,14 +1,103 @@
-import Database from "better-sqlite3";
+import { DatabaseSync, StatementSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-export type Db = Database.Database;
+// Suppress node:sqlite ExperimentalWarning at load time.
+const originalEmitWarning = process.emitWarning as (...args: unknown[]) => void;
+process.emitWarning = (warning: string | Error, ...args: unknown[]) => {
+  const msg =
+    typeof warning === "string"
+      ? warning
+      : "message" in warning
+        ? warning.message
+        : "";
+  if (msg.includes("SQLite is an experimental feature")) return;
+  originalEmitWarning.call(process, warning, ...args);
+};
+
+export interface RunResult {
+  lastInsertRowid: number;
+  changes: number;
+}
+
+export interface Statement {
+  get<T = unknown>(...params: unknown[]): T | undefined;
+  all<T = unknown>(...params: unknown[]): T[];
+  run(...params: unknown[]): RunResult;
+}
+
+export interface Db {
+  open: boolean;
+  exec(sql: string): void;
+  prepare(sql: string): Statement;
+  transaction<T>(fn: () => T): () => T;
+  close(): void;
+}
+
+class DbCompat implements Db {
+  open = true;
+  private db: DatabaseSync;
+
+  constructor(path: string) {
+    this.db = new DatabaseSync(path);
+  }
+
+  exec(sql: string): void {
+    this.db.exec(sql);
+  }
+
+  prepare(sql: string): Statement {
+    const stmt = this.db.prepare(sql);
+    return new StatementCompat(stmt);
+  }
+
+  transaction<T>(fn: () => T): () => T {
+    return () => {
+      this.db.exec("BEGIN");
+      try {
+        const result = fn();
+        this.db.exec("COMMIT");
+        return result;
+      } catch (e) {
+        this.db.exec("ROLLBACK");
+        throw e;
+      }
+    };
+  }
+
+  close(): void {
+    if (this.open) {
+      this.db.close();
+      this.open = false;
+    }
+  }
+}
+
+class StatementCompat implements Statement {
+  constructor(private stmt: StatementSync) {}
+
+  get<T = unknown>(...params: unknown[]): T | undefined {
+    return this.stmt.get(...(params as import("node:sqlite").SQLInputValue[])) as T | undefined;
+  }
+
+  all<T = unknown>(...params: unknown[]): T[] {
+    return this.stmt.all(...(params as import("node:sqlite").SQLInputValue[])) as T[];
+  }
+
+  run(...params: unknown[]): RunResult {
+    const result = this.stmt.run(...(params as import("node:sqlite").SQLInputValue[]));
+    return {
+      lastInsertRowid: Number(result.lastInsertRowid),
+      changes: Number(result.changes),
+    };
+  }
+}
 
 export function openDatabase(path: string): Db {
   mkdirSync(dirname(path), { recursive: true });
-  const db = new Database(path);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  const db = new DbCompat(path);
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
   migrate(db);
   return db;
 }
