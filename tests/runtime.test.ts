@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { createRuntime } from "../src/runtime.js";
+import { saveConfig } from "../src/config.js";
 
 test("runtime opens sqlite and reports missing credentials", () => {
   const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
@@ -88,6 +89,26 @@ test("runtime does not prompt during creation", () => {
   try {
     // If createRuntime attempted to prompt, it would throw in a test environment.
     const runtime = createRuntime({ env: { PI_INTERVALS_HOME: home } });
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime reloadCredentials picks up saved config changes", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({ env: { PI_INTERVALS_HOME: home } });
+    assert.equal(runtime.status().credentialsConfigured, false, "should start without credentials");
+
+    // Simulate saving config
+    saveConfig(home, { apiKey: "saved-key", personId: 99 });
+
+    runtime.reloadCredentials();
+    const status = runtime.status();
+    assert.equal(status.credentialsConfigured, true, "should detect saved credentials after reload");
+    assert.equal(status.personId, 99, "should detect saved personId after reload");
+    assert.ok(status.apiClient, "should create apiClient after reload");
     runtime.close();
   } finally {
     rmSync(home, { recursive: true, force: true });

@@ -39,7 +39,7 @@ function fakeCtx(options: { hasUI?: boolean; inputs?: string[] } = {}): Extensio
   } as unknown as ExtensionCommandContext & { notifications: Array<{ message: string; type: string }> };
 }
 
-function fakeRuntime() {
+function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: number; credentialSource?: "env" | "config" } = {}) {
   const calls = {
     status: 0,
     trySyncNow: 0,
@@ -47,12 +47,19 @@ function fakeRuntime() {
     queryTime: 0,
     editTime: 0,
     setProjectDefaults: 0,
+    reloadCredentials: 0,
   };
+
+  const lastEditPatch: Record<string, unknown>[] = [];
+
+  const credentialsConfigured = options.credentialsConfigured ?? true;
+  const personId = options.personId ?? 42;
+  const credentialSource = options.credentialSource ?? (credentialsConfigured ? "env" : undefined);
 
   const runtime = {
     status: () => {
       calls.status++;
-      return { home: "/tmp/intervals", credentialsConfigured: true, credentialSource: "env" as const, dbOpen: true, personId: 42, apiClient: true };
+      return { home: "/tmp/intervals", credentialsConfigured, credentialSource, dbOpen: true, personId, apiClient: credentialsConfigured };
     },
     trySyncNow: async () => {
       calls.trySyncNow++;
@@ -62,13 +69,14 @@ function fakeRuntime() {
       calls.syncProjectsCatalog++;
       return { clients: 2, projects: 5, worktypes: 8, modules: 3 };
     },
+    reloadCredentials: () => { calls.reloadCredentials++; },
     catalogStore: {
       searchProjectContext: () => [],
       getLastProjectSync: () => "2026-04-24T10:00:00.000Z",
     },
     timerStore: {
-      listActive: () => [{ localId: "t1", description: "test timer" }],
-      listRecent: () => [{ localId: "t1", description: "test timer" }],
+      listActive: () => [{ localId: "t1", description: "test timer", elapsedSeconds: 120, state: "active" }],
+      listRecent: () => [{ localId: "t1", description: "test timer", elapsedSeconds: 120, state: "stopped" }],
     },
     timeEntryStore: {
       pendingForSync: () => [{ localId: "te1" }],
@@ -81,8 +89,9 @@ function fakeRuntime() {
         calls.queryTime++;
         return { startDate: "2026-04-24", endDate: "2026-04-24", totalSeconds: 3600, entries: [], byProject: [] };
       },
-      editTime: () => {
+      editTime: (patch: Record<string, unknown>) => {
         calls.editTime++;
+        lastEditPatch.push(patch);
         return { localId: "te1", syncStatus: "pending" };
       },
     },
@@ -95,7 +104,7 @@ function fakeRuntime() {
     },
   } as unknown as ReturnType<typeof import("../src/runtime.js").createRuntime>;
 
-  return { runtime, calls };
+  return { runtime, calls, lastEditPatch };
 }
 
 test("registers all required intervals commands", () => {
@@ -221,4 +230,104 @@ test("intervals-setup with env credentials shows env source", async () => {
   await cmd.handler("", ctx);
   const notify = ctx.notifications.find((n) => n.message.includes("env"));
   assert.ok(notify, "should mention env source when credentials are configured");
+});
+
+test("intervals-sync-now reports error when credentials are missing", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime({ credentialsConfigured: false, personId: undefined });
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-sync-now")!;
+  const ctx = fakeCtx();
+  await cmd.handler("", ctx);
+  assert.equal(calls.trySyncNow, 0, "should not call trySyncNow when not configured");
+  const errorNotify = ctx.notifications.find((n) => n.type === "error");
+  assert.ok(errorNotify, "should show error when credentials missing");
+  assert.ok(errorNotify!.message.includes("credentials") || errorNotify!.message.includes("person ID"), "error should mention credentials or person ID");
+});
+
+test("intervals-time edit parses and validates patch fields", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls, lastEditPatch } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-time")!;
+  const ctx = fakeCtx();
+  await cmd.handler("edit te1 duration_minutes=30 project_id=5 worktype_id=2 module_id=8 billable=true description=hello date=2026-04-28 start_at=09:00 end_at=17:00", ctx);
+  assert.equal(calls.editTime, 1);
+  assert.equal(calls.trySyncNow, 1);
+  const patch = lastEditPatch[0];
+  assert.ok(patch, "patch should be captured");
+  assert.equal(patch.localId, "te1");
+  assert.equal(patch.durationSeconds, 1800);
+  assert.equal(patch.projectId, 5);
+  assert.equal(patch.worktypeId, 2);
+  assert.equal(patch.moduleId, 8);
+  assert.equal(patch.billable, true);
+  assert.equal(patch.description, "hello");
+  assert.equal(patch.date, "2026-04-28");
+  assert.equal(patch.startAt, "09:00");
+  assert.equal(patch.endAt, "17:00");
+});
+
+test("intervals-time edit rejects invalid numeric values", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-time")!;
+  const ctx = fakeCtx();
+  await cmd.handler("edit te1 duration_minutes=abc", ctx);
+  assert.equal(calls.editTime, 0);
+  const errorNotify = ctx.notifications.find((n) => n.type === "error");
+  assert.ok(errorNotify, "should show error for invalid duration_minutes");
+  assert.ok(errorNotify!.message.includes("duration_minutes"), "error should mention duration_minutes");
+});
+
+test("intervals-time edit rejects unknown fields", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-time")!;
+  const ctx = fakeCtx();
+  await cmd.handler("edit te1 unknown_field=xyz", ctx);
+  assert.equal(calls.editTime, 0);
+  const errorNotify = ctx.notifications.find((n) => n.type === "error");
+  assert.ok(errorNotify, "should show error for unknown field");
+  assert.ok(errorNotify!.message.includes("Unknown field"), "error should mention unknown field");
+});
+
+test("intervals-setup with no credentials and no UI reports error", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime({ credentialsConfigured: false, personId: undefined, credentialSource: undefined });
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-setup")!;
+  const ctx = fakeCtx({ hasUI: false });
+  await cmd.handler("", ctx);
+  assert.equal(calls.reloadCredentials, 0);
+  const errorNotify = ctx.notifications.find((n) => n.type === "error");
+  assert.ok(errorNotify, "should show error when no credentials and no UI");
+  assert.ok(errorNotify!.message.includes("credentials"), "error should mention credentials");
+});
+
+test("intervals-setup interactive save reloads credentials and syncs", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime({ credentialsConfigured: false, personId: undefined, credentialSource: undefined });
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-setup")!;
+  const ctx = fakeCtx({ inputs: ["my-api-key", "42"] });
+  await cmd.handler("", ctx);
+  assert.equal(calls.reloadCredentials, 1, "should reload credentials after saving");
+  assert.equal(calls.syncProjectsCatalog, 1, "should sync projects after setup");
+  const successNotify = ctx.notifications.find((n) => n.type === "info" && n.message.includes("Project sync complete"));
+  assert.ok(successNotify, "should show project sync success after setup");
+});
+
+test("intervals-project-defaults rejects invalid numeric ids", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-project-defaults")!;
+  const ctx = fakeCtx();
+  await cmd.handler("abc 5", ctx);
+  assert.equal(calls.setProjectDefaults, 0);
+  const errorNotify = ctx.notifications.find((n) => n.type === "error");
+  assert.ok(errorNotify, "should show error for invalid project_id");
 });

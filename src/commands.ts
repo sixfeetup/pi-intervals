@@ -65,7 +65,12 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
       }
 
       const personIdStr = await ctx.ui.input("Intervals person ID (optional):");
-      const personId = personIdStr ? Number(personIdStr) : undefined;
+      const parsedPersonId = personIdStr ? Number(personIdStr) : undefined;
+      if (personIdStr && !Number.isFinite(parsedPersonId)) {
+        ctx.ui.notify("Setup cancelled: person ID must be a valid number.", "error");
+        return;
+      }
+      const personId = parsedPersonId;
 
       const config = loadConfig(home);
       saveConfig(home, {
@@ -75,16 +80,10 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
       });
 
       ctx.ui.notify(`Credentials saved to ${home}/config.json`, "info");
+      runtime.reloadCredentials();
 
       try {
-        const freshConfig = loadConfig(home);
-        const creds = resolveCredentials(freshConfig, process.env);
-        if (!creds) {
-          ctx.ui.notify("Failed to resolve credentials after saving.", "error");
-          return;
-        }
-        const api = new IntervalsApiClient({ apiKey: creds.apiKey, baseUrl: creds.baseUrl });
-        const result = await syncProjectsCatalog(api, runtime.catalogStore);
+        const result = await runtime.syncProjectsCatalog();
         ctx.ui.notify(
           `Project sync complete: ${result.projects} projects, ${result.worktypes} worktypes, ${result.modules} modules, ${result.clients} clients`,
           "info",
@@ -117,6 +116,11 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
   pi.registerCommand("intervals-sync-now", {
     description: "Sync pending local time entries to Intervals now",
     handler: async (_args, ctx) => {
+      const status = runtime.status();
+      if (!status.credentialsConfigured || !status.personId) {
+        ctx.ui.notify("Intervals credentials or person ID are not configured. Run /intervals-setup first.", "error");
+        return;
+      }
       const result = await runtime.trySyncNow();
       ctx.ui.notify(`Sync complete: created=${result.timeEntriesCreated} updated=${result.timeEntriesUpdated} failed=${result.failed}`, "info");
     },
@@ -176,18 +180,45 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
         const patch: Record<string, unknown> = { localId };
         for (const token of tokens.slice(1)) {
           const eq = token.indexOf("=");
-          if (eq === -1) continue;
+          if (eq === -1) {
+            ctx.ui.notify(`Invalid token (expected field=value): ${token}`, "error");
+            return;
+          }
           const key = token.slice(0, eq);
           const value = token.slice(eq + 1);
 
           if (key === "duration_minutes") {
-            patch.durationSeconds = Math.round(Number(value) * 60);
+            const num = Number(value);
+            if (!Number.isFinite(num)) {
+              ctx.ui.notify(`Invalid numeric value for duration_minutes: ${value}`, "error");
+              return;
+            }
+            patch.durationSeconds = Math.round(num * 60);
           } else if (key === "project_id") {
-            patch.projectId = Number(value);
+            const num = Number(value);
+            if (!Number.isFinite(num)) {
+              ctx.ui.notify(`Invalid numeric value for project_id: ${value}`, "error");
+              return;
+            }
+            patch.projectId = num;
           } else if (key === "worktype_id") {
-            patch.worktypeId = Number(value);
+            const num = Number(value);
+            if (!Number.isFinite(num)) {
+              ctx.ui.notify(`Invalid numeric value for worktype_id: ${value}`, "error");
+              return;
+            }
+            patch.worktypeId = num;
           } else if (key === "module_id") {
-            patch.moduleId = value === "" || value === "null" ? null : Number(value);
+            if (value === "" || value === "null") {
+              patch.moduleId = null;
+            } else {
+              const num = Number(value);
+              if (!Number.isFinite(num)) {
+                ctx.ui.notify(`Invalid numeric value for module_id: ${value}`, "error");
+                return;
+              }
+              patch.moduleId = num;
+            }
           } else if (key === "billable") {
             patch.billable = value === "true" || value === "1";
           } else if (key === "description") {
@@ -198,6 +229,9 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
             patch.startAt = value === "" || value === "null" ? null : value;
           } else if (key === "end_at") {
             patch.endAt = value === "" || value === "null" ? null : value;
+          } else {
+            ctx.ui.notify(`Unknown field: ${key}`, "error");
+            return;
           }
         }
 
@@ -266,7 +300,15 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
       }
       const projectId = Number(tokens[0]);
       const worktypeId = Number(tokens[1]);
+      if (!Number.isFinite(projectId) || !Number.isFinite(worktypeId)) {
+        ctx.ui.notify("Invalid project_id or worktype_id: must be valid numbers.", "error");
+        return;
+      }
       const moduleId = tokens[2] != null ? Number(tokens[2]) : undefined;
+      if (tokens[2] != null && !Number.isFinite(moduleId!)) {
+        ctx.ui.notify("Invalid module_id: must be a valid number.", "error");
+        return;
+      }
 
       runtime.defaultsStore.setProjectDefaults({
         projectId,

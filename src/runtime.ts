@@ -34,6 +34,7 @@ export interface Runtime {
   close(): void;
   trySyncNow(): Promise<{ timeEntriesCreated: number; timeEntriesUpdated: number; failed: number }>;
   syncProjectsCatalog(): Promise<{ clients: number; projects: number; worktypes: number; modules: number }>;
+  reloadCredentials(): void;
   catalogStore: CatalogStore;
   defaultsStore: ProjectDefaultsStore;
   timerStore: TimerStore;
@@ -46,9 +47,9 @@ export interface Runtime {
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const env = options.env ?? process.env;
   const home = getIntervalsHome(env);
-  const config = loadConfig(home);
-  const credentials = resolveCredentials(config, env);
-  const personId = resolvePersonId(config, env);
+  let config = loadConfig(home);
+  let credentials = resolveCredentials(config, env);
+  let personId = resolvePersonId(config, env);
 
   const db = openDatabase(databasePath(home));
   const catalogStore = new CatalogStore(db);
@@ -56,7 +57,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const timerStore = new TimerStore(db);
   const timeEntryStore = new TimeEntryStore(db);
 
-  const apiClient = credentials
+  let apiClient = credentials
     ? new IntervalsApiClient({ apiKey: credentials.apiKey, baseUrl: credentials.baseUrl })
     : undefined;
 
@@ -91,6 +92,15 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return syncProjectsCatalog(apiClient, catalogStore);
   }
 
+  function reloadCredentials(): void {
+    config = loadConfig(home);
+    credentials = resolveCredentials(config, env);
+    personId = resolvePersonId(config, env);
+    apiClient = credentials
+      ? new IntervalsApiClient({ apiKey: credentials.apiKey, baseUrl: credentials.baseUrl })
+      : undefined;
+  }
+
   function status(): RuntimeStatus {
     return {
       home,
@@ -113,6 +123,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     close,
     trySyncNow,
     syncProjectsCatalog: syncProjectsCatalogNow,
+    reloadCredentials,
     catalogStore,
     defaultsStore,
     timerStore,
