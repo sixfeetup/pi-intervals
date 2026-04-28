@@ -186,7 +186,11 @@ export class TimeEntryStore {
     params.push(localId);
 
     this.db.prepare(`update time_entries set ${sets.join(", ")} where local_id = ?`).run(...params);
-    return this.getTimeEntry(localId)!;
+    const updated = this.getTimeEntry(localId);
+    if (!updated) {
+      throw new Error(`time entry not found: ${localId}`);
+    }
+    return updated;
   }
 
   queryTime({ startDate, endDate, projectId }: { startDate: string; endDate: string; projectId?: number }): TimeEntry[] {

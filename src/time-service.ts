@@ -11,6 +11,7 @@ export interface AddTimeInput {
   worktypeId?: number;
   moduleId?: number;
   date: string;
+  /** Duration in seconds (callers must convert minutes beforehand). */
   durationSeconds: number;
   description?: string;
   billable?: boolean;
@@ -25,6 +26,7 @@ export interface EditTimeInput {
   date?: string;
   startAt?: string | null;
   endAt?: string | null;
+  /** Duration in seconds (callers must convert minutes beforehand). */
   durationSeconds?: number;
   description?: string | null;
   billable?: boolean;
@@ -100,6 +102,10 @@ export class TimeService {
       throw new Error(`time entry not found: ${input.localId}`);
     }
 
+    if (input.projectId != null && input.projectQuery != null) {
+      throw new Error("cannot specify both projectId and projectQuery");
+    }
+
     let projectId = existing.projectId;
     if (input.projectQuery != null) {
       const matches = this.deps.catalogStore.searchProjectContext({ query: input.projectQuery, limit: 5 });
@@ -128,7 +134,7 @@ export class TimeService {
     let moduleId: number | null | undefined = input.moduleId;
     if (moduleId === undefined && projectChanged) {
       const resolved = this.deps.defaultsStore.resolveForProject({ projectId });
-      moduleId = resolved.moduleId;
+      moduleId = resolved.moduleId ?? null;
     }
 
     const patch: UpdateTimeEntryInput = {};

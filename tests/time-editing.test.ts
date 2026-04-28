@@ -460,3 +460,72 @@ test("editTime allows all editable fields at once", () => {
     teardown(dir);
   }
 });
+
+test("editTime clears moduleId when changing to a project without a default module", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [
+        { id: 10, name: "Website", active: true, billable: true, raw: {} },
+        { id: 11, name: "App", active: true, billable: true, raw: {} },
+      ],
+      worktypes: [
+        { id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} },
+        { id: 101, projectId: 11, worktypeId: 6, name: "Design", active: true, raw: {} },
+      ],
+      modules: [
+        { id: 200, projectId: 10, moduleId: 7, name: "Backend", active: true, raw: {} },
+      ],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5, defaultModuleId: 7 });
+    defaults.setProjectDefaults({ projectId: 11, defaultWorktypeId: 6 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+    assert.equal(entry.moduleId, 7);
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      projectId: 11,
+    });
+
+    assert.equal(edited.projectId, 11);
+    assert.equal(edited.moduleId, undefined);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime throws when both projectId and projectQuery are provided", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} }],
+      modules: [],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Initial",
+    });
+
+    assert.throws(
+      () => service.editTime({ localId: entry.localId, projectId: 11, projectQuery: "app" }),
+      /cannot specify both projectId and projectQuery/
+    );
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
