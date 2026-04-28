@@ -97,14 +97,14 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return syncProjectsCatalog(apiClient, catalogStore);
   }
 
-  const intervalMs = options.syncIntervalMs ?? config.syncIntervalMs ?? DEFAULT_SYNC_INTERVAL_MS;
   let backgroundSync: BackgroundSyncHandle | undefined;
 
   function startBackgroundSyncIfReady(): void {
     if (backgroundSync) return;
     if (!apiClient || !personId) return;
+    const effectiveIntervalMs = options.syncIntervalMs ?? config.syncIntervalMs ?? DEFAULT_SYNC_INTERVAL_MS;
     backgroundSync = startBackgroundSync({
-      intervalMs,
+      intervalMs: effectiveIntervalMs,
       syncNow: trySyncNow,
       onError: (_error) => {
         // Silent by default; errors are stored per-row in the database.

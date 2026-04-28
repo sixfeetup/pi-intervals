@@ -8,9 +8,10 @@ export function startBackgroundSync(options: {
   syncNow: () => Promise<unknown>;
   onError?: (error: unknown) => void;
 }): BackgroundSyncHandle {
+  let stopped = false;
   let running = false;
   const tick = async () => {
-    if (running) return;
+    if (stopped || running) return;
     running = true;
     try {
       await options.syncNow();
@@ -22,7 +23,10 @@ export function startBackgroundSync(options: {
   };
   const handle = setInterval(tick, options.intervalMs);
   return {
-    stop: () => clearInterval(handle),
+    stop: () => {
+      stopped = true;
+      clearInterval(handle);
+    },
     tick,
   };
 }
