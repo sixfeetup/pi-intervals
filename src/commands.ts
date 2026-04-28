@@ -1,0 +1,280 @@
+import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import { getIntervalsHome, loadConfig, resolveCredentials, saveConfig } from "./config.js";
+import { syncProjectsCatalog } from "./catalog-sync.js";
+import { IntervalsApiClient } from "./intervals-api.js";
+import type { Runtime } from "./runtime.js";
+import type { TimeRange } from "./types.js";
+
+function formatDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (parts.length === 0) parts.push("0m");
+  return parts.join(" ");
+}
+
+export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): void {
+  pi.registerCommand("intervals-setup", {
+    description: "Configure Intervals API credentials and run initial project sync",
+    handler: async (_args, ctx) => {
+      const status = runtime.status();
+      const home = status.home;
+
+      if (status.credentialSource === "env") {
+        ctx.ui.notify(`Intervals credentials loaded from environment. Database: ${home}`, "info");
+        try {
+          const result = await runtime.syncProjectsCatalog();
+          ctx.ui.notify(
+            `Project sync complete: ${result.projects} projects, ${result.worktypes} worktypes, ${result.modules} modules, ${result.clients} clients`,
+            "info",
+          );
+        } catch (err) {
+          ctx.ui.notify(`Project sync failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+        }
+        return;
+      }
+
+      if (status.credentialSource === "config") {
+        ctx.ui.notify(`Intervals credentials loaded from config file. Database: ${home}`, "info");
+        try {
+          const result = await runtime.syncProjectsCatalog();
+          ctx.ui.notify(
+            `Project sync complete: ${result.projects} projects, ${result.worktypes} worktypes, ${result.modules} modules, ${result.clients} clients`,
+            "info",
+          );
+        } catch (err) {
+          ctx.ui.notify(`Project sync failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+        }
+        return;
+      }
+
+      if (!ctx.hasUI) {
+        ctx.ui.notify(
+          "Intervals credentials are not configured. Set INTERVALS_API_KEY or run this command in interactive mode.",
+          "error",
+        );
+        return;
+      }
+
+      const apiKey = await ctx.ui.input("Intervals API key:");
+      if (!apiKey) {
+        ctx.ui.notify("Setup cancelled: API key is required.", "error");
+        return;
+      }
+
+      const personIdStr = await ctx.ui.input("Intervals person ID (optional):");
+      const personId = personIdStr ? Number(personIdStr) : undefined;
+
+      const config = loadConfig(home);
+      saveConfig(home, {
+        ...config,
+        apiKey,
+        personId: personId ?? config.personId,
+      });
+
+      ctx.ui.notify(`Credentials saved to ${home}/config.json`, "info");
+
+      try {
+        const freshConfig = loadConfig(home);
+        const creds = resolveCredentials(freshConfig, process.env);
+        if (!creds) {
+          ctx.ui.notify("Failed to resolve credentials after saving.", "error");
+          return;
+        }
+        const api = new IntervalsApiClient({ apiKey: creds.apiKey, baseUrl: creds.baseUrl });
+        const result = await syncProjectsCatalog(api, runtime.catalogStore);
+        ctx.ui.notify(
+          `Project sync complete: ${result.projects} projects, ${result.worktypes} worktypes, ${result.modules} modules, ${result.clients} clients`,
+          "info",
+        );
+      } catch (err) {
+        ctx.ui.notify(`Project sync failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      }
+    },
+  });
+
+  pi.registerCommand("intervals-sync-projects", {
+    description: "Sync Intervals project catalog (clients, projects, worktypes, modules)",
+    handler: async (_args, ctx) => {
+      if (!runtime.status().credentialsConfigured) {
+        ctx.ui.notify("Intervals credentials are not configured. Run /intervals-setup first.", "error");
+        return;
+      }
+      try {
+        const result = await runtime.syncProjectsCatalog();
+        ctx.ui.notify(
+          `Project sync complete: ${result.projects} projects, ${result.worktypes} worktypes, ${result.modules} modules, ${result.clients} clients`,
+          "info",
+        );
+      } catch (err) {
+        ctx.ui.notify(`Project sync failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      }
+    },
+  });
+
+  pi.registerCommand("intervals-sync-now", {
+    description: "Sync pending local time entries to Intervals now",
+    handler: async (_args, ctx) => {
+      const result = await runtime.trySyncNow();
+      ctx.ui.notify(`Sync complete: created=${result.timeEntriesCreated} updated=${result.timeEntriesUpdated} failed=${result.failed}`, "info");
+    },
+  });
+
+  pi.registerCommand("intervals-status", {
+    description: "Show Intervals extension status",
+    handler: async (_args, ctx) => {
+      const status = runtime.status();
+      const activeTimers = runtime.timerStore.listActive().length;
+      const pendingSync = runtime.timeEntryStore.pendingForSync().length;
+      const lastSync = runtime.catalogStore.getLastProjectSync();
+      const source = status.credentialSource ?? "none";
+      const lines = [
+        `Database: ${status.home}`,
+        `Credentials: ${source}`,
+        `active timers: ${activeTimers}`,
+        `pending sync: ${pendingSync}`,
+        `last project sync: ${lastSync ?? "never"}`,
+      ];
+      ctx.ui.notify(lines.join(" | "), "info");
+    },
+  });
+
+  pi.registerCommand("intervals-timers", {
+    description: "Show active or recent timers",
+    handler: async (args, ctx) => {
+      const arg = args.trim();
+      const timers = arg === "recent"
+        ? runtime.timerStore.listRecent(10)
+        : runtime.timerStore.listActive();
+      if (timers.length === 0) {
+        ctx.ui.notify("No timers found.", "info");
+        return;
+      }
+      const lines = timers.map((t) => {
+        const dur = formatDuration(t.elapsedSeconds);
+        return `${t.localId.slice(0, 8)} ${t.state} ${dur} ${t.description}`;
+      });
+      ctx.ui.notify(lines.join("\n"), "info");
+    },
+  });
+
+  pi.registerCommand("intervals-time", {
+    description: "Query time entries by range or edit an entry",
+    handler: async (args, ctx) => {
+      const trimmed = args.trim();
+
+      if (trimmed.startsWith("edit ")) {
+        const tokens = trimmed.slice(5).split(/\s+/);
+        const localId = tokens[0];
+        if (!localId) {
+          ctx.ui.notify("Usage: /intervals-time edit <time_entry_id> [field=value ...]", "error");
+          return;
+        }
+
+        const patch: Record<string, unknown> = { localId };
+        for (const token of tokens.slice(1)) {
+          const eq = token.indexOf("=");
+          if (eq === -1) continue;
+          const key = token.slice(0, eq);
+          const value = token.slice(eq + 1);
+
+          if (key === "duration_minutes") {
+            patch.durationSeconds = Math.round(Number(value) * 60);
+          } else if (key === "project_id") {
+            patch.projectId = Number(value);
+          } else if (key === "worktype_id") {
+            patch.worktypeId = Number(value);
+          } else if (key === "module_id") {
+            patch.moduleId = value === "" || value === "null" ? null : Number(value);
+          } else if (key === "billable") {
+            patch.billable = value === "true" || value === "1";
+          } else if (key === "description") {
+            patch.description = value;
+          } else if (key === "date") {
+            patch.date = value;
+          } else if (key === "start_at") {
+            patch.startAt = value === "" || value === "null" ? null : value;
+          } else if (key === "end_at") {
+            patch.endAt = value === "" || value === "null" ? null : value;
+          }
+        }
+
+        try {
+          const entry = runtime.timeService.editTime(patch as any);
+          const syncResult = await runtime.trySyncNow();
+          ctx.ui.notify(
+            `Updated ${entry.localId.slice(0, 8)} | sync created=${syncResult.timeEntriesCreated} updated=${syncResult.timeEntriesUpdated} failed=${syncResult.failed}`,
+            "info",
+          );
+        } catch (err) {
+          ctx.ui.notify(`Edit failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+        }
+        return;
+      }
+
+      let range: TimeRange = "today";
+      let startDate: string | undefined;
+      let endDate: string | undefined;
+
+      const arg = trimmed || "today";
+
+      if (arg === "today") range = "today";
+      else if (arg === "this-week") range = "this_week";
+      else if (arg === "last-week") range = "last_week";
+      else if (arg === "this-month") range = "this_month";
+      else if (arg === "last-month") range = "last_month";
+      else if (arg.includes("..")) {
+        const [start, end] = arg.split("..");
+        range = "custom";
+        startDate = start;
+        endDate = end;
+      } else {
+        ctx.ui.notify(
+          `Unknown range: ${arg}. Use today, this-week, last-week, this-month, last-month, or YYYY-MM-DD..YYYY-MM-DD`,
+          "error",
+        );
+        return;
+      }
+
+      try {
+        const report = runtime.timeService.queryTime({ range, start_date: startDate, end_date: endDate });
+        const dur = formatDuration(report.totalSeconds);
+        const label = range.replace(/_/g, "-");
+        ctx.ui.notify(`${label} | ${report.startDate} .. ${report.endDate} | ${dur} | ${report.entries.length} entries`, "info");
+        if (report.entries.length > 0) {
+          const lines = report.entries.map((e) => {
+            const ed = formatDuration(e.durationSeconds);
+            return `${e.date} ${ed} ${e.projectName} ${e.description ?? ""}`;
+          });
+          ctx.ui.notify(lines.join("\n"), "info");
+        }
+      } catch (err) {
+        ctx.ui.notify(`Query failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      }
+    },
+  });
+
+  pi.registerCommand("intervals-project-defaults", {
+    description: "Set default worktype and optional module for a project",
+    handler: async (args, ctx) => {
+      const tokens = args.trim().split(/\s+/);
+      if (tokens.length < 2) {
+        ctx.ui.notify("Usage: /intervals-project-defaults <project_id> <worktype_id> [module_id]", "error");
+        return;
+      }
+      const projectId = Number(tokens[0]);
+      const worktypeId = Number(tokens[1]);
+      const moduleId = tokens[2] != null ? Number(tokens[2]) : undefined;
+
+      runtime.defaultsStore.setProjectDefaults({
+        projectId,
+        defaultWorktypeId: worktypeId,
+        defaultModuleId: moduleId,
+      });
+
+      ctx.ui.notify(`Project defaults set for ${projectId}: worktype=${worktypeId} module=${moduleId ?? "none"}`, "info");
+    },
+  });
+}

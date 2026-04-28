@@ -6,6 +6,7 @@ import {
   resolveCredentials,
   resolvePersonId,
 } from "./config.js";
+import { syncProjectsCatalog } from "./catalog-sync.js";
 import { openDatabase, type Db } from "./db.js";
 import { IntervalsApiClient } from "./intervals-api.js";
 import { ProjectDefaultsStore } from "./project-defaults-store.js";
@@ -22,6 +23,7 @@ export interface RuntimeOptions {
 export interface RuntimeStatus {
   home: string;
   credentialsConfigured: boolean;
+  credentialSource?: "env" | "config";
   dbOpen: boolean;
   personId?: number;
   apiClient?: boolean;
@@ -31,6 +33,7 @@ export interface Runtime {
   status(): RuntimeStatus;
   close(): void;
   trySyncNow(): Promise<{ timeEntriesCreated: number; timeEntriesUpdated: number; failed: number }>;
+  syncProjectsCatalog(): Promise<{ clients: number; projects: number; worktypes: number; modules: number }>;
   catalogStore: CatalogStore;
   defaultsStore: ProjectDefaultsStore;
   timerStore: TimerStore;
@@ -81,10 +84,18 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     });
   }
 
+  async function syncProjectsCatalogNow(): Promise<{ clients: number; projects: number; worktypes: number; modules: number }> {
+    if (!apiClient) {
+      throw new Error("Intervals credentials are not configured");
+    }
+    return syncProjectsCatalog(apiClient, catalogStore);
+  }
+
   function status(): RuntimeStatus {
     return {
       home,
       credentialsConfigured: credentials != null,
+      credentialSource: credentials?.source,
       dbOpen: db.open,
       personId: personId ?? undefined,
       apiClient: apiClient != null,
@@ -101,6 +112,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     status,
     close,
     trySyncNow,
+    syncProjectsCatalog: syncProjectsCatalogNow,
     catalogStore,
     defaultsStore,
     timerStore,
