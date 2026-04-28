@@ -7,6 +7,7 @@ export const DEFAULT_INTERVALS_BASE_URL = "https://api.myintervals.com/";
 export interface IntervalsConfig {
   apiKey?: string;
   baseUrl?: string;
+  personId?: number;
   syncIntervalMs?: number;
 }
 
@@ -57,4 +58,13 @@ export function resolveCredentials(
     return { apiKey: config.apiKey, baseUrl: config.baseUrl || DEFAULT_INTERVALS_BASE_URL, source: "config" };
   }
   return undefined;
+}
+
+export function resolvePersonId(config: IntervalsConfig, env: NodeJS.ProcessEnv = process.env): number | undefined {
+  const envPerson = env.INTERVALS_PERSON_ID;
+  if (envPerson != null && envPerson !== "") {
+    const parsed = Number(envPerson);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return config.personId;
 }

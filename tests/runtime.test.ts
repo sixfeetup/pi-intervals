@@ -1,0 +1,95 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { createRuntime } from "../src/runtime.js";
+
+test("runtime opens sqlite and reports missing credentials", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({ env: { PI_INTERVALS_HOME: home } });
+    const status = runtime.status();
+    assert.equal(status.credentialsConfigured, false);
+    assert.equal(status.home, home);
+    assert.ok(status.dbOpen);
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime wires api client and reports credentials configured", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({
+      env: {
+        PI_INTERVALS_HOME: home,
+        INTERVALS_API_KEY: "test-key",
+        INTERVALS_BASE_URL: "https://api.example/",
+        INTERVALS_PERSON_ID: "42",
+      },
+    });
+    const status = runtime.status();
+    assert.equal(status.credentialsConfigured, true);
+    assert.equal(status.personId, 42);
+    assert.ok(status.apiClient);
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime close cleans up database", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({ env: { PI_INTERVALS_HOME: home } });
+    assert.equal(runtime.status().dbOpen, true);
+    runtime.close();
+    assert.equal(runtime.status().dbOpen, false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime trySyncNow is available and returns summary even without credentials", async () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({ env: { PI_INTERVALS_HOME: home } });
+    const result = await runtime.trySyncNow();
+    assert.equal(result.timeEntriesCreated, 0);
+    assert.equal(result.timeEntriesUpdated, 0);
+    assert.equal(result.failed, 0);
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime initializes stores and services", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({ env: { PI_INTERVALS_HOME: home } });
+    assert.ok(runtime.catalogStore);
+    assert.ok(runtime.defaultsStore);
+    assert.ok(runtime.timerStore);
+    assert.ok(runtime.timeEntryStore);
+    assert.ok(runtime.timerService);
+    assert.ok(runtime.timeService);
+    assert.ok(runtime.syncService);
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime does not prompt during creation", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    // If createRuntime attempted to prompt, it would throw in a test environment.
+    const runtime = createRuntime({ env: { PI_INTERVALS_HOME: home } });
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
