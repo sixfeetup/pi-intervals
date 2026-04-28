@@ -200,12 +200,12 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					projectId: params.project_id,
 					projectQuery: params.project_query,
 					worktypeId: params.worktype_id,
-					moduleId: params.module_id ?? undefined,
+					moduleId: params.module_id,
 					date: params.date,
-					startAt: params.start_at ?? undefined,
-					endAt: params.end_at ?? undefined,
+					startAt: params.start_at,
+					endAt: params.end_at,
 					durationSeconds: params.duration_minutes != null ? Math.round(params.duration_minutes * 60) : undefined,
-					description: params.description ?? undefined,
+					description: params.description,
 					billable: params.billable,
 				});
 				const syncResult = await runtime.trySyncNow();

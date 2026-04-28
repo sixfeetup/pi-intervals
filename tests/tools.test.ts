@@ -14,7 +14,14 @@ function fakePi(): { pi: ExtensionAPI; tools: ToolDefinition[] } {
 }
 
 function fakeRuntime() {
-  return {
+  const calls = {
+    startTimer: [] as unknown[],
+    stopTimer: [] as unknown[],
+    addTime: [] as unknown[],
+    editTime: [] as unknown[],
+    trySyncNow: 0,
+  };
+  const runtime = {
     status: () => ({ credentialsConfigured: false }),
     catalogStore: {
       searchProjectContext: () => [],
@@ -23,13 +30,25 @@ function fakeRuntime() {
       setProjectDefaults: () => {},
     },
     timerService: {
-      startTimer: () => ({ localId: "t1", description: "test" }),
-      stopTimer: () => ({ localId: "te1" }),
+      startTimer: (...args: unknown[]) => {
+        calls.startTimer.push(args);
+        return { localId: "t1", description: "test" };
+      },
+      stopTimer: (...args: unknown[]) => {
+        calls.stopTimer.push(args);
+        return { localId: "te1", durationSeconds: 1800 };
+      },
       listActive: () => [],
     },
     timeService: {
-      addTime: () => ({ localId: "te1" }),
-      editTime: () => ({ localId: "te1" }),
+      addTime: (...args: unknown[]) => {
+        calls.addTime.push(args);
+        return { localId: "te1", durationSeconds: 3600, syncStatus: "pending" };
+      },
+      editTime: (...args: unknown[]) => {
+        calls.editTime.push(args);
+        return { localId: "te1", syncStatus: "pending" };
+      },
       queryTime: () => ({
         startDate: "2026-04-24",
         endDate: "2026-04-24",
@@ -44,13 +63,17 @@ function fakeRuntime() {
     timeEntryStore: {
       listRecent: () => [],
     },
-    trySyncNow: async () => ({ timeEntriesCreated: 0, timeEntriesUpdated: 0, failed: 0 }),
+    trySyncNow: async () => {
+      calls.trySyncNow += 1;
+      return { timeEntriesCreated: 0, timeEntriesUpdated: 0, failed: 0 };
+    },
   } as unknown as ReturnType<typeof import("../src/runtime.js").createRuntime>;
+  return { runtime, calls };
 }
 
 test("registers all required intervals tools", () => {
   const { pi, tools } = fakePi();
-  const runtime = fakeRuntime();
+  const { runtime } = fakeRuntime();
   registerIntervalsTools(runtime, pi);
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
@@ -69,7 +92,7 @@ test("registers all required intervals tools", () => {
 
 test("each tool has a promptSnippet and promptGuidelines", () => {
   const { pi, tools } = fakePi();
-  const runtime = fakeRuntime();
+  const { runtime } = fakeRuntime();
   registerIntervalsTools(runtime, pi);
   for (const tool of tools) {
     assert.ok(tool.promptSnippet, `${tool.name} should have promptSnippet`);
@@ -80,7 +103,7 @@ test("each tool has a promptSnippet and promptGuidelines", () => {
 
 test("intervals_start_timer requires only description", async () => {
   const { pi, tools } = fakePi();
-  const runtime = fakeRuntime();
+  const { runtime } = fakeRuntime();
   registerIntervalsTools(runtime, pi);
   const tool = tools.find((t) => t.name === "intervals_start_timer")!;
   const result = await tool.execute("call-1", { description: "write tests" }, undefined, undefined, {} as any);
@@ -89,27 +112,35 @@ test("intervals_start_timer requires only description", async () => {
 
 test("intervals_stop_timer creates time entry and triggers sync", async () => {
   const { pi, tools } = fakePi();
-  const runtime = fakeRuntime();
+  const { runtime, calls } = fakeRuntime();
   registerIntervalsTools(runtime, pi);
   const tool = tools.find((t) => t.name === "intervals_stop_timer")!;
   const result = await tool.execute("call-1", { timer_id: "t1", project_id: 10, worktype_id: 5 }, undefined, undefined, {} as any);
   assert.ok(String((result.content[0] as { type: "text"; text: string }).text).includes("te1"));
+  assert.equal(calls.trySyncNow, 1, "trySyncNow should be called once");
 });
 
-test("intervals_edit_time converts duration_minutes to seconds", async () => {
+test("intervals_edit_time converts duration_minutes to seconds and triggers sync", async () => {
   const { pi, tools } = fakePi();
-  const runtime = fakeRuntime();
+  const { runtime, calls } = fakeRuntime();
   registerIntervalsTools(runtime, pi);
   const tool = tools.find((t) => t.name === "intervals_edit_time")!;
   const result = await tool.execute("call-1", { time_entry_id: "te1", duration_minutes: 30 }, undefined, undefined, {} as any);
   assert.ok(String((result.content[0] as { type: "text"; text: string }).text).includes("te1"));
+  assert.equal(calls.trySyncNow, 1, "trySyncNow should be called once");
+
+  const editCall = calls.editTime[0] as [{ durationSeconds?: number }];
+  assert.equal(editCall[0].durationSeconds, 1800, "duration_minutes should be converted to seconds");
 });
 
 test("intervals_add_time converts duration_minutes to seconds", async () => {
   const { pi, tools } = fakePi();
-  const runtime = fakeRuntime();
+  const { runtime, calls } = fakeRuntime();
   registerIntervalsTools(runtime, pi);
   const tool = tools.find((t) => t.name === "intervals_add_time")!;
   const result = await tool.execute("call-1", { project_id: 10, date: "2026-04-24", duration_minutes: 60 }, undefined, undefined, {} as any);
   assert.ok(String((result.content[0] as { type: "text"; text: string }).text).includes("te1"));
+
+  const addCall = calls.addTime[0] as [{ durationSeconds?: number }];
+  assert.equal(addCall[0].durationSeconds, 3600, "duration_minutes should be converted to seconds");
 });
