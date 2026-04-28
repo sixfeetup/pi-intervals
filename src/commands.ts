@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-cod
 import { getIntervalsHome, loadConfig, resolveCredentials, saveConfig } from "./config.js";
 import { syncProjectsCatalog } from "./catalog-sync.js";
 import { IntervalsApiClient } from "./intervals-api.js";
-import { formatDuration, formatSyncSummary, formatTimeReport, formatTimer } from "./format.js";
+import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer } from "./format.js";
 import type { Runtime } from "./runtime.js";
 import type { TimeRange } from "./types.js";
 
@@ -226,8 +226,16 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
         try {
           const entry = runtime.timeService.editTime(patch as any);
           const syncResult = await runtime.trySyncNow();
+          const formattedEntry = formatTimeEntry({
+            ...entry,
+            projectName: runtime.catalogStore.getProject(entry.projectId)?.name,
+            worktypeName: runtime.catalogStore.getWorktype(entry.projectId, entry.worktypeId)?.name,
+            moduleName: entry.moduleId != null
+              ? runtime.catalogStore.getModule(entry.projectId, entry.moduleId)?.name
+              : undefined,
+          });
           ctx.ui.notify(
-            `Updated ${entry.localId.slice(0, 8)} | sync created=${syncResult.timeEntriesCreated} updated=${syncResult.timeEntriesUpdated} failed=${syncResult.failed}`,
+            `Updated ${entry.localId.slice(0, 8)}\n${formattedEntry}\n${formatSyncSummary(syncResult)}`,
             "info",
           );
         } catch (err) {

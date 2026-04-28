@@ -133,8 +133,8 @@ test("formatTimeReport renders total and grouped projects", () => {
   };
   const text = formatTimeReport(report);
   assert.ok(text.includes("Total: 1h 30m"));
-  assert.ok(text.includes("Website"));
-  assert.ok(text.includes("API"));
+  assert.ok(text.includes("Website: 1h"));
+  assert.ok(text.includes("API: 30m"));
   assert.ok(text.includes("Homepage"));
   assert.ok(text.includes("Auth endpoint"));
 });

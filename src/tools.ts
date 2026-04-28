@@ -50,8 +50,8 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					limit: params.limit ?? 20,
 				});
 				const lines = results.map((r) => {
-					const wts = r.worktypes.map((w) => w.name).join(", ") || "none";
-					const mods = r.modules.map((m) => m.name).join(", ") || "none";
+					const wts = r.worktypes.map((w) => `${w.id} ${w.name}`).join(", ") || "none";
+					const mods = r.modules.map((m) => `${m.id} ${m.name}`).join(", ") || "none";
 					return `${r.projectId}: ${r.projectName} (${r.clientName ?? "no client"}) — worktypes: ${wts}; modules: ${mods}`;
 				});
 				return textResult(lines.join("\n") || "No projects found.", { results });

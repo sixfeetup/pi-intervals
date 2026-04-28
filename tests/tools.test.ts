@@ -35,22 +35,22 @@ function fakeRuntime() {
     timerService: {
       startTimer: (...args: unknown[]) => {
         calls.startTimer.push(args);
-        return { localId: "t1", description: "test" };
+        return { localId: "t1", description: "test", startedAt: "2026-04-24T10:00:00Z", elapsedSeconds: 0, state: "active", createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:00:00Z" };
       },
       stopTimer: (...args: unknown[]) => {
         calls.stopTimer.push(args);
-        return { localId: "te1", durationSeconds: 1800 };
+        return { localId: "te1", projectId: 10, worktypeId: 5, date: "2026-04-24", durationSeconds: 1800, billable: true, syncStatus: "pending", syncAttempts: 0, createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:00:00Z" };
       },
       listActive: () => [],
     },
     timeService: {
       addTime: (...args: unknown[]) => {
         calls.addTime.push(args);
-        return { localId: "te1", durationSeconds: 3600, syncStatus: "pending" };
+        return { localId: "te1", projectId: 10, worktypeId: 5, date: "2026-04-24", durationSeconds: 3600, billable: true, syncStatus: "pending", syncAttempts: 0, createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:00:00Z" };
       },
       editTime: (...args: unknown[]) => {
         calls.editTime.push(args);
-        return { localId: "te1", syncStatus: "pending" };
+        return { localId: "te1", projectId: 10, worktypeId: 5, date: "2026-04-24", durationSeconds: 1800, billable: true, syncStatus: "pending", syncAttempts: 0, createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:00:00Z" };
       },
       queryTime: () => ({
         startDate: "2026-04-24",
