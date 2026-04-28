@@ -95,6 +95,9 @@ test("queryTime supports today range", () => {
     assert.equal(report.endDate, "2026-04-24");
     assert.equal(report.totalSeconds, 3600);
     assert.equal(report.entries.length, 1);
+    assert.equal(report.entries[0].projectName, "Website");
+    assert.equal(report.entries[0].worktypeName, "Development");
+    assert.equal(report.entries[0].moduleName, undefined);
     assert.equal(report.byProject.length, 1);
     assert.equal(report.byProject[0].projectId, 10);
     assert.equal(report.byProject[0].projectName, "Website");
@@ -323,6 +326,49 @@ test("queryTime throws when projectQuery resolves nothing", () => {
     assert.throws(
       () => service.queryTime({ range: "today", projectQuery: "nomatch", now: new Date("2026-04-24T12:00:00Z") }),
       /no project found/
+    );
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("queryTime entries include joined catalog names", () => {
+  const { dir, db, catalog, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [{ id: 10, clientId: 1, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Development", active: true, raw: {} }],
+      modules: [{ id: 200, projectId: 10, moduleId: 7, name: "Backend", active: true, raw: {} }],
+    });
+
+    service.addTime({ projectId: 10, worktypeId: 5, moduleId: 7, date: "2026-04-24", durationSeconds: 3600, description: "A" });
+
+    const report = service.queryTime({ range: "today", now: new Date("2026-04-24T12:00:00Z") });
+    assert.equal(report.entries.length, 1);
+    assert.equal(report.entries[0].projectName, "Website");
+    assert.equal(report.entries[0].worktypeName, "Development");
+    assert.equal(report.entries[0].moduleName, "Backend");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("queryTime throws when both projectId and projectQuery are specified", () => {
+  const { dir, db, catalog, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [],
+      modules: [],
+    });
+
+    assert.throws(
+      () => service.queryTime({ range: "today", projectId: 10, projectQuery: "web", now: new Date("2026-04-24T12:00:00Z") }),
+      /cannot specify both/
     );
   } finally {
     db.close();

@@ -25,11 +25,17 @@ export interface QueryTimeInput {
   now?: Date;
 }
 
+export interface TimeReportEntry extends TimeEntry {
+  projectName: string;
+  worktypeName: string;
+  moduleName?: string;
+}
+
 export interface TimeReport {
   startDate: string;
   endDate: string;
   totalSeconds: number;
-  entries: TimeEntry[];
+  entries: TimeReportEntry[];
   byProject: Array<{
     projectId: number;
     projectName: string;
@@ -75,6 +81,10 @@ export class TimeService {
   }
 
   queryTime(input: QueryTimeInput): TimeReport {
+    if (input.projectId != null && input.projectQuery != null) {
+      throw new Error("cannot specify both projectId and projectQuery");
+    }
+
     const { startDate, endDate } = resolveDateRange({
       range: input.range,
       start_date: input.start_date,
@@ -94,7 +104,18 @@ export class TimeService {
       projectId = matches[0].projectId;
     }
 
-    const entries = this.deps.timeEntryStore.queryTime({ startDate, endDate, projectId });
+    const rawEntries = this.deps.timeEntryStore.queryTime({ startDate, endDate, projectId });
+    const entries: TimeReportEntry[] = rawEntries.map((entry) => {
+      const project = this.deps.catalogStore.getProject(entry.projectId);
+      const worktype = this.deps.catalogStore.getWorktype(entry.projectId, entry.worktypeId);
+      const mod = entry.moduleId != null ? this.deps.catalogStore.getModule(entry.projectId, entry.moduleId) : undefined;
+      return {
+        ...entry,
+        projectName: project?.name ?? `Project ${entry.projectId}`,
+        worktypeName: worktype?.name ?? `Worktype ${entry.worktypeId}`,
+        moduleName: mod?.name,
+      };
+    });
 
     const projectTotals = new Map<number, { projectId: number; projectName: string; totalSeconds: number }>();
     for (const entry of entries) {
@@ -102,10 +123,9 @@ export class TimeService {
       if (existing) {
         existing.totalSeconds += entry.durationSeconds;
       } else {
-        const project = this.deps.catalogStore.getProject(entry.projectId);
         projectTotals.set(entry.projectId, {
           projectId: entry.projectId,
-          projectName: project?.name ?? `Project ${entry.projectId}`,
+          projectName: entry.projectName,
           totalSeconds: entry.durationSeconds,
         });
       }
