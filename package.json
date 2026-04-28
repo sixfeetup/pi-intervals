@@ -1,0 +1,26 @@
+{
+  "name": "pi-intervals",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "pi": {
+    "extensions": ["./src/index.ts"]
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "0.70.0",
+    "@mariozechner/pi-coding-agent": "0.70.0",
+    "better-sqlite3": "^11.10.0",
+    "typebox": "^1.1.33"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
