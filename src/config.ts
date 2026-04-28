@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -40,7 +40,9 @@ export function loadConfig(home: string): IntervalsConfig {
 
 export function saveConfig(home: string, config: IntervalsConfig): void {
   ensureIntervalsHome(home);
-  writeFileSync(configPath(home), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  const path = configPath(home);
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(path, 0o600);
 }
 
 export function resolveCredentials(
