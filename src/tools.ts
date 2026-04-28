@@ -1,6 +1,7 @@
 import { StringEnum } from "@mariozechner/pi-ai";
 import { defineTool, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
+import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer } from "./format.js";
 import type { Runtime } from "./runtime.js";
 
 function resolveProjectQuery(
@@ -48,7 +49,12 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					projectId: params.project_id,
 					limit: params.limit ?? 20,
 				});
-				return textResult(JSON.stringify({ results }, null, 2), { results });
+				const lines = results.map((r) => {
+					const wts = r.worktypes.map((w) => w.name).join(", ") || "none";
+					const mods = r.modules.map((m) => m.name).join(", ") || "none";
+					return `${r.projectId}: ${r.projectName} (${r.clientName ?? "no client"}) — worktypes: ${wts}; modules: ${mods}`;
+				});
+				return textResult(lines.join("\n") || "No projects found.", { results });
 			},
 		}),
 	);
@@ -82,10 +88,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					moduleId: params.module_id,
 					notes: params.notes,
 				});
-				return textResult(
-					`Timer started: ${timer.localId}\nDescription: ${timer.description}\nState: active`,
-					{ timer },
-				);
+				return textResult(formatTimer(timer), { timer });
 			},
 		}),
 	);
@@ -122,8 +125,11 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					billable: params.billable,
 				});
 				const syncResult = await runtime.trySyncNow();
+				const projectName = runtime.catalogStore.getProject(entry.projectId)?.name ?? `Project ${entry.projectId}`;
+				const worktypeName = runtime.catalogStore.getWorktype(entry.projectId, entry.worktypeId)?.name ?? `Worktype ${entry.worktypeId}`;
+				const dur = formatDuration(entry.durationSeconds);
 				return textResult(
-					`Timer stopped. Time entry created: ${entry.localId}\nDuration: ${entry.durationSeconds}s\nSync: created=${syncResult.timeEntriesCreated} updated=${syncResult.timeEntriesUpdated} failed=${syncResult.failed}`,
+					`Timer stopped → ${entry.localId}\n${entry.date} ${dur} ${projectName} (${worktypeName})${entry.description ? ` | ${entry.description}` : ""}\n${formatSyncSummary(syncResult)}`,
 					{ entry, sync: syncResult },
 				);
 			},
@@ -162,7 +168,14 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					billable: params.billable,
 				});
 				return textResult(
-					`Time entry added: ${entry.localId}\nDuration: ${entry.durationSeconds}s\nStatus: ${entry.syncStatus}`,
+					`${entry.localId}\n${formatTimeEntry({
+						...entry,
+						projectName: runtime.catalogStore.getProject(entry.projectId)?.name,
+						worktypeName: runtime.catalogStore.getWorktype(entry.projectId, entry.worktypeId)?.name,
+						moduleName: entry.moduleId != null
+							? runtime.catalogStore.getModule(entry.projectId, entry.moduleId)?.name
+							: undefined,
+					})}`,
 					{ entry },
 				);
 			},
@@ -210,7 +223,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				});
 				const syncResult = await runtime.trySyncNow();
 				return textResult(
-					`Time entry updated: ${entry.localId}\nStatus: ${entry.syncStatus}\nSync: created=${syncResult.timeEntriesCreated} updated=${syncResult.timeEntriesUpdated} failed=${syncResult.failed}`,
+					`Time entry updated: ${entry.localId}\n${formatSyncSummary(syncResult)}`,
 					{ entry, sync: syncResult },
 				);
 			},
@@ -246,7 +259,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					projectId: params.project_id,
 					projectQuery: params.project_query,
 				});
-				return textResult(JSON.stringify(report, null, 2), { report });
+				return textResult(formatTimeReport(report), { report });
 			},
 		}),
 	);
@@ -272,7 +285,8 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					params.state === "recent"
 						? runtime.timerStore.listRecent(params.limit ?? 20)
 						: runtime.timerStore.listActive();
-				return textResult(JSON.stringify({ timers }, null, 2), { timers });
+				const lines = timers.map((t) => formatTimer(t));
+				return textResult(lines.join("\n") || "No timers found.", { timers });
 			},
 		}),
 	);
@@ -292,7 +306,15 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 			}),
 			execute: async (_toolCallId, params) => {
 				const entries = runtime.timeEntryStore.listRecent({ limit: params.limit ?? 20 });
-				return textResult(JSON.stringify({ entries }, null, 2), { entries });
+				const lines = entries.map((e) => formatTimeEntry({
+					...e,
+					projectName: runtime.catalogStore.getProject(e.projectId)?.name,
+					worktypeName: runtime.catalogStore.getWorktype(e.projectId, e.worktypeId)?.name,
+					moduleName: e.moduleId != null
+						? runtime.catalogStore.getModule(e.projectId, e.moduleId)?.name
+						: undefined,
+				}));
+				return textResult(lines.join("\n") || "No time entries found.", { entries });
 			},
 		}),
 	);
@@ -341,10 +363,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 			parameters: Type.Object({}),
 			execute: async () => {
 				const result = await runtime.trySyncNow();
-				return textResult(
-					`Sync complete: created=${result.timeEntriesCreated} updated=${result.timeEntriesUpdated} failed=${result.failed}`,
-					result,
-				);
+				return textResult(`Sync complete | ${formatSyncSummary(result)}`, result);
 			},
 		}),
 	);

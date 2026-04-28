@@ -25,6 +25,9 @@ function fakeRuntime() {
     status: () => ({ credentialsConfigured: false }),
     catalogStore: {
       searchProjectContext: () => [],
+      getProject: () => undefined,
+      getWorktype: () => undefined,
+      getModule: () => undefined,
     },
     defaultsStore: {
       setProjectDefaults: () => {},

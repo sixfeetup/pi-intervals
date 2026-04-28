@@ -2,18 +2,9 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-cod
 import { getIntervalsHome, loadConfig, resolveCredentials, saveConfig } from "./config.js";
 import { syncProjectsCatalog } from "./catalog-sync.js";
 import { IntervalsApiClient } from "./intervals-api.js";
+import { formatDuration, formatSyncSummary, formatTimeReport, formatTimer } from "./format.js";
 import type { Runtime } from "./runtime.js";
 import type { TimeRange } from "./types.js";
-
-function formatDuration(totalSeconds: number): string {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  if (parts.length === 0) parts.push("0m");
-  return parts.join(" ");
-}
 
 export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): void {
   pi.registerCommand("intervals-setup", {
@@ -122,7 +113,7 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
         return;
       }
       const result = await runtime.trySyncNow();
-      ctx.ui.notify(`Sync complete: created=${result.timeEntriesCreated} updated=${result.timeEntriesUpdated} failed=${result.failed}`, "info");
+      ctx.ui.notify(`Sync complete | ${formatSyncSummary(result)}`, "info");
     },
   });
 
@@ -156,10 +147,7 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
         ctx.ui.notify("No timers found.", "info");
         return;
       }
-      const lines = timers.map((t) => {
-        const dur = formatDuration(t.elapsedSeconds);
-        return `${t.localId.slice(0, 8)} ${t.state} ${dur} ${t.description}`;
-      });
+      const lines = timers.map((t) => formatTimer(t));
       ctx.ui.notify(lines.join("\n"), "info");
     },
   });
@@ -274,16 +262,8 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
 
       try {
         const report = runtime.timeService.queryTime({ range, start_date: startDate, end_date: endDate });
-        const dur = formatDuration(report.totalSeconds);
         const label = range.replace(/_/g, "-");
-        ctx.ui.notify(`${label} | ${report.startDate} .. ${report.endDate} | ${dur} | ${report.entries.length} entries`, "info");
-        if (report.entries.length > 0) {
-          const lines = report.entries.map((e) => {
-            const ed = formatDuration(e.durationSeconds);
-            return `${e.date} ${ed} ${e.projectName} ${e.description ?? ""}`;
-          });
-          ctx.ui.notify(lines.join("\n"), "info");
-        }
+        ctx.ui.notify(`${label}\n${formatTimeReport(report)}`, "info");
       } catch (err) {
         ctx.ui.notify(`Query failed: ${err instanceof Error ? err.message : String(err)}`, "error");
       }
