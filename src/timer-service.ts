@@ -1,0 +1,97 @@
+import { randomUUID } from "node:crypto";
+import type { CatalogStore } from "./catalog-store.js";
+import type { ProjectDefaultsStore } from "./project-defaults-store.js";
+import type { TimeEntry, TimeEntryStore } from "./time-entry-store.js";
+import type { Timer, TimerStore } from "./timer-store.js";
+
+export interface StartTimerInput {
+  description: string;
+  projectId?: number;
+  worktypeId?: number;
+  moduleId?: number;
+  notes?: string;
+  now?: Date;
+}
+
+export interface StopTimerInput {
+  localId: string;
+  projectId?: number;
+  worktypeId?: number;
+  moduleId?: number;
+  description?: string;
+  billable?: boolean;
+  now?: Date;
+}
+
+export class TimerService {
+  constructor(
+    private readonly timerStore: TimerStore,
+    private readonly timeEntryStore: TimeEntryStore,
+    private readonly defaultsStore: ProjectDefaultsStore,
+    private readonly catalogStore: CatalogStore,
+  ) {}
+
+  startTimer(input: StartTimerInput): Timer {
+    const now = input.now ?? new Date();
+    const iso = now.toISOString();
+    return this.timerStore.insertTimer({
+      localId: randomUUID(),
+      description: input.description,
+      projectId: input.projectId,
+      worktypeId: input.worktypeId,
+      moduleId: input.moduleId,
+      notes: input.notes,
+      startedAt: iso,
+      createdAt: iso,
+      updatedAt: iso,
+    });
+  }
+
+  stopTimer(input: StopTimerInput): TimeEntry {
+    const timer = this.timerStore.getTimer(input.localId);
+    if (!timer) throw new Error(`timer not found: ${input.localId}`);
+    if (timer.state !== "active") throw new Error(`timer is not active: ${input.localId}`);
+
+    const now = input.now ?? new Date();
+    const stoppedAt = now.toISOString();
+    const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - new Date(timer.startedAt).getTime()) / 1000));
+
+    const projectId = input.projectId ?? timer.projectId;
+    if (projectId == null) throw new Error("project is required");
+
+    const projectChanged = input.projectId != null && input.projectId !== timer.projectId;
+
+    const resolved = this.defaultsStore.resolveForProject({
+      projectId,
+      worktypeId: input.worktypeId ?? (projectChanged ? undefined : timer.worktypeId),
+      moduleId: input.moduleId ?? (projectChanged ? undefined : timer.moduleId),
+    });
+
+    const worktypeId = resolved.worktypeId;
+    if (worktypeId == null) throw new Error("worktype is required");
+
+    const moduleId = resolved.moduleId;
+
+    this.timerStore.markTimerStopped(timer.localId, stoppedAt, elapsedSeconds);
+
+    const entry = this.timeEntryStore.insertTimeEntry({
+      localId: randomUUID(),
+      sourceTimerId: timer.localId,
+      projectId,
+      worktypeId,
+      moduleId,
+      date: stoppedAt.slice(0, 10),
+      durationSeconds: elapsedSeconds,
+      description: input.description ?? timer.description,
+      billable: input.billable,
+      createdAt: stoppedAt,
+      updatedAt: stoppedAt,
+    });
+
+    return entry;
+  }
+
+  listActive(): Timer[] {
+    return this.timerStore.listActive();
+  }
+}
