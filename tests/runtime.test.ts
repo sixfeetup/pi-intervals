@@ -114,3 +114,92 @@ test("runtime reloadCredentials picks up saved config changes", () => {
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("runtime starts background sync when credentials exist", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({
+      env: {
+        PI_INTERVALS_HOME: home,
+        INTERVALS_API_KEY: "test-key",
+        INTERVALS_BASE_URL: "https://api.example/",
+        INTERVALS_PERSON_ID: "42",
+      },
+      syncIntervalMs: 60000,
+    });
+    assert.equal(runtime.status().backgroundSyncRunning, true);
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime does not start background sync without credentials", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({ env: { PI_INTERVALS_HOME: home } });
+    assert.equal(runtime.status().backgroundSyncRunning, false);
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime close stops background sync", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    const runtime = createRuntime({
+      env: {
+        PI_INTERVALS_HOME: home,
+        INTERVALS_API_KEY: "test-key",
+        INTERVALS_BASE_URL: "https://api.example/",
+        INTERVALS_PERSON_ID: "42",
+      },
+      syncIntervalMs: 60000,
+    });
+    assert.equal(runtime.status().backgroundSyncRunning, true);
+    runtime.close();
+    assert.equal(runtime.status().backgroundSyncRunning, false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime reloadCredentials stops background sync when credentials removed", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    saveConfig(home, { apiKey: "saved-key", personId: 99 });
+    const runtime = createRuntime({
+      env: { PI_INTERVALS_HOME: home },
+      syncIntervalMs: 60000,
+    });
+    assert.equal(runtime.status().backgroundSyncRunning, true);
+
+    // Remove credentials by clearing config and reloading
+    saveConfig(home, {});
+    runtime.reloadCredentials();
+    assert.equal(runtime.status().backgroundSyncRunning, false);
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime background sync calls trySyncNow on interval", async () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-intervals-runtime-"));
+  try {
+    saveConfig(home, { apiKey: "saved-key", personId: 99 });
+    const runtime = createRuntime({
+      env: { PI_INTERVALS_HOME: home },
+      syncIntervalMs: 30,
+    });
+    assert.equal(runtime.status().backgroundSyncRunning, true);
+
+    // Wait enough time for at least one interval tick
+    await new Promise((r) => setTimeout(r, 80));
+
+    runtime.close();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

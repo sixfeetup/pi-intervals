@@ -1,3 +1,4 @@
+import { startBackgroundSync, type BackgroundSyncHandle } from "./background-sync.js";
 import { CatalogStore } from "./catalog-store.js";
 import {
   databasePath,
@@ -18,6 +19,7 @@ import { TimerStore } from "./timer-store.js";
 
 export interface RuntimeOptions {
   env?: NodeJS.ProcessEnv;
+  syncIntervalMs?: number;
 }
 
 export interface RuntimeStatus {
@@ -27,6 +29,7 @@ export interface RuntimeStatus {
   dbOpen: boolean;
   personId?: number;
   apiClient?: boolean;
+  backgroundSyncRunning?: boolean;
 }
 
 export interface Runtime {
@@ -43,6 +46,8 @@ export interface Runtime {
   timeService: TimeService;
   syncService: { syncPending: typeof syncPending };
 }
+
+const DEFAULT_SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const env = options.env ?? process.env;
@@ -92,6 +97,26 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return syncProjectsCatalog(apiClient, catalogStore);
   }
 
+  const intervalMs = options.syncIntervalMs ?? config.syncIntervalMs ?? DEFAULT_SYNC_INTERVAL_MS;
+  let backgroundSync: BackgroundSyncHandle | undefined;
+
+  function startBackgroundSyncIfReady(): void {
+    if (backgroundSync) return;
+    if (!apiClient || !personId) return;
+    backgroundSync = startBackgroundSync({
+      intervalMs,
+      syncNow: trySyncNow,
+      onError: (_error) => {
+        // Silent by default; errors are stored per-row in the database.
+      },
+    });
+  }
+
+  function stopBackgroundSync(): void {
+    backgroundSync?.stop();
+    backgroundSync = undefined;
+  }
+
   function reloadCredentials(): void {
     config = loadConfig(home);
     credentials = resolveCredentials(config, env);
@@ -99,6 +124,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     apiClient = credentials
       ? new IntervalsApiClient({ apiKey: credentials.apiKey, baseUrl: credentials.baseUrl })
       : undefined;
+    stopBackgroundSync();
+    startBackgroundSyncIfReady();
   }
 
   function status(): RuntimeStatus {
@@ -109,14 +136,18 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       dbOpen: db.open,
       personId: personId ?? undefined,
       apiClient: apiClient != null,
+      backgroundSyncRunning: backgroundSync != null,
     };
   }
 
   function close(): void {
+    stopBackgroundSync();
     if (db.open) {
       db.close();
     }
   }
+
+  startBackgroundSyncIfReady();
 
   return {
     status,
