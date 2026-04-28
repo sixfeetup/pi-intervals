@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "test": "tsx --test tests/**/*.test.ts",
     "typecheck": "tsc --noEmit",

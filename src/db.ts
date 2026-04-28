@@ -1,8 +1,10 @@
-import { DatabaseSync, StatementSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-// Suppress node:sqlite ExperimentalWarning at load time.
+type StatementSyncType = import("node:sqlite").StatementSync;
+type DatabaseSyncInstance = InstanceType<typeof import("node:sqlite").DatabaseSync>;
+
+// Suppress node:sqlite ExperimentalWarning before first import.
 const originalEmitWarning = process.emitWarning as (...args: unknown[]) => void;
 process.emitWarning = (warning: string | Error, ...args: unknown[]) => {
   const msg =
@@ -14,6 +16,8 @@ process.emitWarning = (warning: string | Error, ...args: unknown[]) => {
   if (msg.includes("SQLite is an experimental feature")) return;
   originalEmitWarning.call(process, warning, ...args);
 };
+
+const { DatabaseSync } = await import("node:sqlite");
 
 export interface RunResult {
   lastInsertRowid: number;
@@ -36,7 +40,7 @@ export interface Db {
 
 class DbCompat implements Db {
   open = true;
-  private db: DatabaseSync;
+  private db: DatabaseSyncInstance;
 
   constructor(path: string) {
     this.db = new DatabaseSync(path);
@@ -74,7 +78,7 @@ class DbCompat implements Db {
 }
 
 class StatementCompat implements Statement {
-  constructor(private stmt: StatementSync) {}
+  constructor(private stmt: StatementSyncType) {}
 
   get<T = unknown>(...params: unknown[]): T | undefined {
     return this.stmt.get(...(params as import("node:sqlite").SQLInputValue[])) as T | undefined;
