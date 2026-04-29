@@ -107,6 +107,14 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
   return { runtime, calls, lastEditPatch };
 }
 
+function assertProjectSyncCompleteNotification(ctx: { notifications: Array<{ message: string; type: string }> }) {
+  const syncNotify = ctx.notifications.find((n) => n.message.startsWith("Project sync complete"));
+  assert.deepEqual(syncNotify, {
+    message: "Project sync complete: 5 projects, 8 worktypes, 3 modules, 2 clients",
+    type: "info",
+  });
+}
+
 test("registers all required intervals commands", () => {
   const { pi, commands } = fakePi();
   const { runtime } = fakeRuntime();
@@ -221,15 +229,34 @@ test("intervals-project-defaults sets defaults", async () => {
   assert.ok(notify, "should show success");
 });
 
-test("intervals-setup with env credentials shows env source", async () => {
+test("intervals-setup with env credentials syncs project catalog immediately", async () => {
   const { pi, commands } = fakePi();
-  const { runtime } = fakeRuntime();
+  const { runtime, calls } = fakeRuntime({ credentialSource: "env" });
   registerIntervalsCommands(runtime, pi);
   const cmd = commands.find((c) => c.name === "intervals-setup")!;
   const ctx = fakeCtx();
+
   await cmd.handler("", ctx);
-  const notify = ctx.notifications.find((n) => n.message.includes("env"));
-  assert.ok(notify, "should mention env source when credentials are configured");
+
+  assert.equal(calls.syncProjectsCatalog, 1, "should sync project catalog immediately");
+  const sourceNotify = ctx.notifications.find((n) => n.message.includes("environment"));
+  assert.ok(sourceNotify, "should mention env source when credentials are configured");
+  assertProjectSyncCompleteNotification(ctx);
+});
+
+test("intervals-setup with config credentials syncs project catalog immediately", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime({ credentialSource: "config" });
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-setup")!;
+  const ctx = fakeCtx();
+
+  await cmd.handler("", ctx);
+
+  assert.equal(calls.syncProjectsCatalog, 1, "should sync project catalog immediately");
+  const sourceNotify = ctx.notifications.find((n) => n.message.includes("config file"));
+  assert.ok(sourceNotify, "should mention config source when credentials are configured");
+  assertProjectSyncCompleteNotification(ctx);
 });
 
 test("intervals-sync-now reports error when credentials are missing", async () => {
@@ -316,8 +343,7 @@ test("intervals-setup interactive save reloads credentials and syncs", async () 
   await cmd.handler("", ctx);
   assert.equal(calls.reloadCredentials, 1, "should reload credentials after saving");
   assert.equal(calls.syncProjectsCatalog, 1, "should sync projects after setup");
-  const successNotify = ctx.notifications.find((n) => n.type === "info" && n.message.includes("Project sync complete"));
-  assert.ok(successNotify, "should show project sync success after setup");
+  assertProjectSyncCompleteNotification(ctx);
 });
 
 test("intervals-project-defaults rejects invalid numeric ids", async () => {
