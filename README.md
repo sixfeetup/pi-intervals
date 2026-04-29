@@ -4,18 +4,15 @@ A pi extension for local-first Intervals time tracking.
 
 Timers and time entries are captured in a local SQLite database first, then synced to Intervals in the background or on demand. Queries and reports are always local-only and never call the Intervals API.
 
-## Install / develop
+## Install
+
+Install the extension as a pi package from GitHub:
 
 ```bash
-npm install
-npm run check
+pi install git:git@github.com:sixfeetup/pi-intervals.git
 ```
 
-Load the extension in pi:
-
-```bash
-pi -e ./src/index.ts
-```
+Then start pi normally and run `/intervals-setup` to configure your Intervals credentials and sync the project catalog.
 
 ## Configuration
 
