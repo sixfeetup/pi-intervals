@@ -51,8 +51,10 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 ## How it works
 
 - **Timers are local-only.** Starting a timer writes a lightweight local row with just a description. Project, worktype, and module hints are optional.
+- **Running timers can be reclassified locally.** Edit a timer's project, worktype, or module hints before stopping it; the updated classification is applied when the time entry is created.
 - **Stop/apply creates a time entry.** When you stop a timer, you provide (or resolve) the project and worktype. The extension creates a pending time entry and immediately tries to sync it to Intervals.
 - **Time entries are local-first.** `intervals_add_time`, `intervals_edit_time`, and `intervals_stop_timer` all persist to SQLite before any network call. If sync fails, the entry stays local with a `failed` or `pending` status and can be retried.
+- **Catalog sync stores active rows.** Project sync fetches all catalog pages, keeps active projects and active classifications, and retains clients referenced by active projects.
 - **Reports are local-only.** `query_time` and `/intervals-time` read from SQLite and never call the Intervals API.
 
 ## Slash commands
@@ -63,7 +65,8 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `/intervals-sync-projects` | Refresh local catalog of clients, projects, worktypes, and modules |
 | `/intervals-sync-now` | Retry pending time-entry sync immediately |
 | `/intervals-status` | Show DB path, credential source, active timers, pending sync count, and last project sync |
-| `/intervals-timers` | Show active or recent timers |
+| `/intervals-timers [recent]` | Show bright, compact active timers or recently stopped timers |
+| `/intervals-timers edit <timer_id> [project_id=...] [worktype_id=...] [module_id=...\|null]` | Update classification hints on a running timer |
 | `/intervals-time <range>` | Query local time entries (`today`, `this-week`, `last-week`, `this-month`, `last-month`, or `YYYY-MM-DD..YYYY-MM-DD`) |
 | `/intervals-time edit <id> [field=value ...]` | Edit a local time entry from the command line |
 | `/intervals-project-defaults <project_id> <worktype_id> [module_id]` | Set default worktype and module for a project |
@@ -75,6 +78,7 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `intervals_find_project_context` | Search the local project catalog for IDs and classifications (local-only) |
 | `intervals_start_timer` | Start a local timer with a simple description; project/worktype/module are optional |
 | `intervals_stop_timer` | Stop a timer, resolve classification, create a pending time entry, and sync |
+| `intervals_edit_timer` | Update project/worktype/module hints on a running local timer (local-only) |
 | `intervals_add_time` | Add a completed time entry directly (duration in minutes) |
 | `intervals_edit_time` | Edit an existing local time entry, mark it pending, and re-sync |
 | `intervals_query_time` | Report time entries by date range and project filter (local-only) |
