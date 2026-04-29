@@ -20,6 +20,13 @@ function normalizeBoolean(val: unknown): boolean {
   return false;
 }
 
+function normalizeActive(val: unknown): boolean {
+  // Intervals normally sends active as "t"/"f". If a fixture or future endpoint omits
+  // the field, treat it as active rather than accidentally dropping the whole catalog.
+  if (val == null) return true;
+  return normalizeBoolean(val);
+}
+
 function getString(obj: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const val = obj[key];
@@ -51,7 +58,7 @@ export async function syncProjectsCatalog(api: SyncApi, store: CatalogStore): Pr
     return {
       id: getNumber(obj, "id") ?? 0,
       name: getString(obj, "name") ?? "",
-      active: normalizeBoolean(obj.active),
+      active: normalizeActive(obj.active),
       raw: c,
     };
   });
@@ -62,7 +69,7 @@ export async function syncProjectsCatalog(api: SyncApi, store: CatalogStore): Pr
       id: getNumber(obj, "id") ?? 0,
       clientId: getNumber(obj, "clientid", "client_id") ?? undefined,
       name: getString(obj, "name") ?? "",
-      active: normalizeBoolean(obj.active),
+      active: normalizeActive(obj.active),
       billable: normalizeBoolean(obj.billable),
       raw: p,
     };
@@ -75,7 +82,7 @@ export async function syncProjectsCatalog(api: SyncApi, store: CatalogStore): Pr
       projectId: getNumber(obj, "projectid", "project_id") ?? 0,
       worktypeId: getNumber(obj, "worktypeid", "worktype_id") ?? undefined,
       name: getString(obj, "worktype", "name", "worktypename") ?? "",
-      active: normalizeBoolean(obj.active),
+      active: normalizeActive(obj.active),
       raw: w,
     };
   });
@@ -87,17 +94,34 @@ export async function syncProjectsCatalog(api: SyncApi, store: CatalogStore): Pr
       projectId: getNumber(obj, "projectid", "project_id") ?? 0,
       moduleId: getNumber(obj, "moduleid", "module_id") ?? undefined,
       name: getString(obj, "module", "name", "modulename") ?? "",
-      active: normalizeBoolean(obj.active),
+      active: normalizeActive(obj.active),
       raw: m,
     };
   });
 
-  store.replaceCatalog({ clients, projects, worktypes, modules });
+  const activeProjects = projects.filter((p) => p.active);
+  const activeProjectIds = new Set(activeProjects.map((p) => p.id));
+  const referencedClientIds = new Set(
+    activeProjects
+      .map((p) => p.clientId)
+      .filter((id): id is number => id != null),
+  );
+
+  const retainedClients = clients.filter((c) => c.active || referencedClientIds.has(c.id));
+  const activeWorktypes = worktypes.filter((w) => w.active && activeProjectIds.has(w.projectId));
+  const activeModules = modules.filter((m) => m.active && activeProjectIds.has(m.projectId));
+
+  store.replaceCatalog({
+    clients: retainedClients,
+    projects: activeProjects,
+    worktypes: activeWorktypes,
+    modules: activeModules,
+  });
 
   return {
-    clients: clients.length,
-    projects: projects.length,
-    worktypes: worktypes.length,
-    modules: modules.length,
+    clients: retainedClients.length,
+    projects: activeProjects.length,
+    worktypes: activeWorktypes.length,
+    modules: activeModules.length,
   };
 }
