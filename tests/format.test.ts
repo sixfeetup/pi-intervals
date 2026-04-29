@@ -22,17 +22,17 @@ test("formatDuration renders hours and minutes compactly", () => {
   assert.equal(formatDuration(150), "2m");
 });
 
-test("formatTimer renders active timer compactly", () => {
+test("formatTimer renders active timer using current elapsed time", () => {
   const timer: Timer = {
     localId: "abc12345-0000-0000-0000-000000000000",
     description: "Design review",
     startedAt: "2026-04-24T10:00:00Z",
-    elapsedSeconds: 3660,
+    elapsedSeconds: 0,
     state: "active",
     createdAt: "2026-04-24T10:00:00Z",
     updatedAt: "2026-04-24T10:00:00Z",
   };
-  assert.equal(formatTimer(timer), "abc12345 active 1h 1m Design review");
+  assert.equal(formatTimer(timer, new Date("2026-04-24T11:01:00Z")), "abc12345 active 1h 1m Design review");
 });
 
 test("formatTimer renders stopped timer compactly", () => {

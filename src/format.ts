@@ -12,10 +12,19 @@ export function formatDuration(totalSeconds: number): string {
   return parts.join(" ");
 }
 
-export function formatTimer(timer: Timer): string {
+export function formatTimer(timer: Timer, now = new Date()): string {
   const id = timer.localId.slice(0, 8);
-  const dur = formatDuration(timer.elapsedSeconds);
+  const dur = formatDuration(getTimerElapsedSeconds(timer, now));
   return `${id} ${timer.state} ${dur} ${timer.description}`;
+}
+
+function getTimerElapsedSeconds(timer: Timer, now: Date): number {
+  if (timer.state !== "active") return timer.elapsedSeconds;
+
+  const startedAt = new Date(timer.startedAt).getTime();
+  if (!Number.isFinite(startedAt)) return timer.elapsedSeconds;
+
+  return Math.max(0, Math.floor((now.getTime() - startedAt) / 1000));
 }
 
 export function formatTimeEntry(
