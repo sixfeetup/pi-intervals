@@ -11,7 +11,7 @@ test("api client fetches resource collections with json headers", async () => {
   const api = new IntervalsApiClient({ apiKey: "secret", baseUrl: "https://api.example/", fetchImpl });
   const clients = await api.listResource("client");
   assert.deepEqual(clients, [{ id: 1, name: "Acme" }]);
-  assert.equal(calls[0].url, "https://api.example/client/");
+  assert.equal(calls[0].url, "https://api.example/client/?limit=100&offset=0");
   assert.equal((calls[0].init.headers as Record<string, string>).Accept, "application/json");
   assert.ok((calls[0].init.headers as Record<string, string>).Authorization.startsWith("Basic "));
 });
@@ -55,4 +55,39 @@ test("extractCollection detects various wrapper keys", () => {
   assert.deepEqual(extractCollection({ items: [{ id: 1 }] }, "time"), [{ id: 1 }]);
   assert.deepEqual(extractCollection({ data: [{ id: 1 }] }, "time"), [{ id: 1 }]);
   assert.deepEqual(extractCollection({ other: [] }, "time"), []);
+});
+
+test("listResource follows limit/offset pagination until the final partial page", async () => {
+  const calls: string[] = [];
+  const fetchImpl: typeof fetch = async (url, init) => {
+    calls.push(String(url));
+    const parsed = new URL(String(url));
+    const limit = Number(parsed.searchParams.get("limit"));
+    const offset = Number(parsed.searchParams.get("offset"));
+
+    assert.equal(init?.method, "GET");
+    assert.equal(limit, 100);
+
+    const ids = offset === 0
+      ? Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))
+      : offset === 100
+        ? Array.from({ length: 100 }, (_, i) => ({ id: i + 101 }))
+        : offset === 200
+          ? [{ id: 201 }]
+          : [];
+
+    return new Response(JSON.stringify({ project: ids }), { status: 200 });
+  };
+
+  const api = new IntervalsApiClient({ apiKey: "secret", baseUrl: "https://api.example/", fetchImpl });
+  const projects = await api.listResource("project");
+
+  assert.equal(projects.length, 201);
+  assert.deepEqual(projects.at(0), { id: 1 });
+  assert.deepEqual(projects.at(-1), { id: 201 });
+  assert.deepEqual(calls, [
+    "https://api.example/project/?limit=100&offset=0",
+    "https://api.example/project/?limit=100&offset=100",
+    "https://api.example/project/?limit=100&offset=200",
+  ]);
 });

@@ -1,11 +1,27 @@
 export type IntervalsResource = "client" | "project" | "projectworktype" | "projectmodule" | "timer" | "time";
 
+const PAGE_SIZE = 100;
+const MAX_PAGES = 1000;
+
 export class IntervalsApiClient {
   constructor(private readonly options: { apiKey: string; baseUrl: string; fetchImpl?: typeof fetch }) {}
 
   async listResource(resource: IntervalsResource): Promise<unknown[]> {
-    const data = await this.request("GET", resource);
-    return extractCollection(data, resource);
+    const items: unknown[] = [];
+
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const offset = page * PAGE_SIZE;
+      const data = await this.request("GET", resource, undefined, {
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+      });
+      const pageItems = extractCollection(data, resource);
+      items.push(...pageItems);
+
+      if (pageItems.length < PAGE_SIZE) return items;
+    }
+
+    throw new Error(`Exceeded ${MAX_PAGES} pages while fetching ${resource}`);
   }
 
   async createResource(resource: "timer" | "time", body: Record<string, unknown>): Promise<unknown> {
@@ -16,16 +32,26 @@ export class IntervalsApiClient {
     return this.request("PUT", `${resource}/${id}`, body);
   }
 
-  private async request(method: string, resourcePath: string, body?: Record<string, unknown>): Promise<unknown> {
+  private async request(
+    method: string,
+    resourcePath: string,
+    body?: Record<string, unknown>,
+    query?: Record<string, string>,
+  ): Promise<unknown> {
     const fetchImpl = this.options.fetchImpl ?? fetch;
     const base = this.options.baseUrl.endsWith("/") ? this.options.baseUrl : `${this.options.baseUrl}/`;
-    const url = new URL(resourcePath.endsWith("/") ? resourcePath : `${resourcePath}/`, base).toString();
+    const url = new URL(resourcePath.endsWith("/") ? resourcePath : `${resourcePath}/`, base);
+    if (query) {
+      for (const [key, value] of Object.entries(query)) {
+        url.searchParams.set(key, value);
+      }
+    }
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `Basic ${Buffer.from(`${this.options.apiKey}:X`).toString("base64")}`,
     };
     if (body) headers["Content-Type"] = "application/json";
-    const response = await fetchImpl(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const response = await fetchImpl(url.toString(), { method, headers, body: body ? JSON.stringify(body) : undefined });
     const text = await response.text();
     const data = text ? JSON.parse(text) : undefined;
     if (!response.ok) throw new Error(sanitizeApiError(text || `${response.status} ${response.statusText}`, this.options.apiKey));
