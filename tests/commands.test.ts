@@ -183,7 +183,7 @@ test("intervals-sync-now runs sync service", async () => {
   assert.ok(notify.message.includes("created=1"), "should report created count");
 });
 
-test("intervals-timers shows active timers", async () => {
+test("intervals-timers shows bright compact active timer rows", async () => {
   const { pi, commands } = fakePi();
   const { runtime } = fakeRuntime();
   registerIntervalsCommands(runtime, pi);
@@ -191,6 +191,9 @@ test("intervals-timers shows active timers", async () => {
   const ctx = fakeCtx();
   await cmd.handler("", ctx);
   const notify = ctx.notifications[0];
+  assert.ok(notify.message.includes("\u001b[92m● active\u001b[0m"), "should brighten active status");
+  assert.ok(notify.message.includes("\u001b[93m2m\u001b[0m"), "should brighten elapsed time");
+  assert.ok(notify.message.includes("\u001b[96mt1\u001b[0m"), "should brighten timer id");
   assert.ok(notify.message.includes("test timer"), "should show timer description");
 });
 

@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-cod
 import { getIntervalsHome, loadConfig, resolveCredentials, saveConfig } from "./config.js";
 import { syncProjectsCatalog } from "./catalog-sync.js";
 import { IntervalsApiClient } from "./intervals-api.js";
-import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer } from "./format.js";
+import { formatBrightTimer, formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport } from "./format.js";
 import type { Runtime } from "./runtime.js";
 import type { TimeRange } from "./types.js";
 
@@ -147,7 +147,7 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
         ctx.ui.notify("No timers found.", "info");
         return;
       }
-      const lines = timers.map((t) => formatTimer(t));
+      const lines = timers.map((t) => formatBrightTimer(t));
       ctx.ui.notify(lines.join("\n"), "info");
     },
   });

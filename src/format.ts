@@ -18,6 +18,19 @@ export function formatTimer(timer: Timer, now = new Date()): string {
   return `${id} ${timer.state} ${dur} ${timer.description}`;
 }
 
+const ANSI_RESET = "\u001b[0m";
+const ANSI_BRIGHT_GREEN = "\u001b[92m";
+const ANSI_BRIGHT_YELLOW = "\u001b[93m";
+const ANSI_BRIGHT_CYAN = "\u001b[96m";
+const ANSI_DIM = "\u001b[2m";
+
+export function formatBrightTimer(timer: Timer, now = new Date()): string {
+  const id = timer.localId.slice(0, 8);
+  const dur = formatDuration(getTimerElapsedSeconds(timer, now));
+  const statusColor = timer.state === "active" ? ANSI_BRIGHT_GREEN : ANSI_DIM;
+  return `${statusColor}● ${timer.state}${ANSI_RESET}  ${ANSI_BRIGHT_YELLOW}${dur}${ANSI_RESET}  ${ANSI_BRIGHT_CYAN}${id}${ANSI_RESET}  ${timer.description}`;
+}
+
 function getTimerElapsedSeconds(timer: Timer, now: Date): number {
   if (timer.state !== "active") return timer.elapsedSeconds;
 
