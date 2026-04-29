@@ -28,6 +28,15 @@ export interface InsertTimerInput {
   updatedAt: string;
 }
 
+export interface UpdateTimerInput {
+  projectId?: number | null;
+  worktypeId?: number | null;
+  moduleId?: number | null;
+  description?: string;
+  notes?: string | null;
+  updatedAt: string;
+}
+
 export class TimerStore {
   constructor(private readonly db: Db) {}
 
@@ -155,6 +164,40 @@ export class TimerStore {
       updatedAt: string;
     }>;
     return rows.map((r) => this.mapRow(r));
+  }
+
+  updateTimer(localId: string, patch: UpdateTimerInput): Timer {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (patch.projectId !== undefined) {
+      sets.push("project_id = ?");
+      params.push(patch.projectId);
+    }
+    if (patch.worktypeId !== undefined) {
+      sets.push("worktype_id = ?");
+      params.push(patch.worktypeId);
+    }
+    if (patch.moduleId !== undefined) {
+      sets.push("module_id = ?");
+      params.push(patch.moduleId);
+    }
+    if (patch.description !== undefined) {
+      sets.push("description = ?");
+      params.push(patch.description);
+    }
+    if (patch.notes !== undefined) {
+      sets.push("notes = ?");
+      params.push(patch.notes);
+    }
+
+    sets.push("updated_at = ?");
+    params.push(patch.updatedAt, localId);
+
+    this.db.prepare(`update timers set ${sets.join(", ")} where local_id = ?`).run(...params);
+    const updated = this.getTimer(localId);
+    if (!updated) throw new Error(`timer not found: ${localId}`);
+    return updated;
   }
 
   markTimerStopped(localId: string, stoppedAt: string, elapsedSeconds: number): void {

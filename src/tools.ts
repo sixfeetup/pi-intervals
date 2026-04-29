@@ -138,6 +138,38 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 
 	pi.registerTool(
 		defineTool({
+			name: "intervals_edit_timer",
+			label: "Edit Intervals timer",
+			description:
+				"Update a running local timer's project, worktype, or module hints. This is local-only and affects the time entry created when the timer is stopped.",
+			promptSnippet: "intervals_edit_timer — update project/worktype/module on a running timer",
+			promptGuidelines: [
+				"Use intervals_edit_timer when the user wants to classify or reclassify a running timer without stopping it.",
+				"Resolve project/worktype/module IDs with intervals_find_project_context before editing when needed.",
+				"intervals_edit_timer is local-only; it does not sync anything to Intervals until the timer is stopped.",
+			],
+			parameters: Type.Object({
+				timer_id: Type.String({ description: "Local ID of the active timer to edit" }),
+				project_id: Type.Optional(Type.Number({ description: "Project ID hint for the timer" })),
+				project_query: Type.Optional(Type.String({ description: "Project search query to resolve the project" })),
+				worktype_id: Type.Optional(Type.Number({ description: "Worktype ID hint for the timer" })),
+				module_id: Type.Optional(Type.Union([Type.Number(), Type.Null()], { description: "Module ID hint, or null to clear" })),
+			}),
+			execute: async (_toolCallId, params) => {
+				const projectId = resolveProjectQuery(runtime, params.project_query) ?? params.project_id;
+				const timer = runtime.timerService.editTimer({
+					localId: params.timer_id,
+					projectId,
+					worktypeId: params.worktype_id,
+					moduleId: params.module_id,
+				});
+				return textResult(`Timer updated → ${formatTimer(timer)}`, { timer });
+			},
+		}),
+	);
+
+	pi.registerTool(
+		defineTool({
 			name: "intervals_add_time",
 			label: "Add Intervals time entry",
 			description:

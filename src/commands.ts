@@ -140,6 +140,64 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
     description: "Show active or recent timers",
     handler: async (args, ctx) => {
       const arg = args.trim();
+
+      if (arg.startsWith("edit ")) {
+        const tokens = arg.slice(5).split(/\s+/);
+        const localId = tokens[0];
+        if (!localId) {
+          ctx.ui.notify("Usage: /intervals-timers edit <timer_id> [project_id=...] [worktype_id=...] [module_id=...|null]", "error");
+          return;
+        }
+
+        const patch: Record<string, unknown> = { localId };
+        for (const token of tokens.slice(1)) {
+          const eq = token.indexOf("=");
+          if (eq === -1) {
+            ctx.ui.notify(`Invalid token (expected field=value): ${token}`, "error");
+            return;
+          }
+          const key = token.slice(0, eq);
+          const value = token.slice(eq + 1);
+          if (key === "project_id") {
+            const num = Number(value);
+            if (!Number.isFinite(num)) {
+              ctx.ui.notify(`Invalid numeric value for project_id: ${value}`, "error");
+              return;
+            }
+            patch.projectId = num;
+          } else if (key === "worktype_id") {
+            const num = Number(value);
+            if (!Number.isFinite(num)) {
+              ctx.ui.notify(`Invalid numeric value for worktype_id: ${value}`, "error");
+              return;
+            }
+            patch.worktypeId = num;
+          } else if (key === "module_id") {
+            if (value === "" || value === "null") {
+              patch.moduleId = null;
+            } else {
+              const num = Number(value);
+              if (!Number.isFinite(num)) {
+                ctx.ui.notify(`Invalid numeric value for module_id: ${value}`, "error");
+                return;
+              }
+              patch.moduleId = num;
+            }
+          } else {
+            ctx.ui.notify(`Unknown field: ${key}`, "error");
+            return;
+          }
+        }
+
+        try {
+          const timer = runtime.timerService.editTimer(patch as any);
+          ctx.ui.notify(`Timer updated\n${formatBrightTimer(timer)}`, "info");
+        } catch (err) {
+          ctx.ui.notify(`Timer edit failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+        }
+        return;
+      }
+
       const timers = arg === "recent"
         ? runtime.timerStore.listRecent(10)
         : runtime.timerStore.listActive();

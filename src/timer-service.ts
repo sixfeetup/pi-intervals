@@ -23,6 +23,14 @@ export interface StopTimerInput {
   now?: Date;
 }
 
+export interface EditTimerInput {
+  localId: string;
+  projectId?: number;
+  worktypeId?: number;
+  moduleId?: number | null;
+  now?: Date;
+}
+
 export class TimerService {
   constructor(
     private readonly timerStore: TimerStore,
@@ -44,6 +52,30 @@ export class TimerService {
       startedAt: iso,
       createdAt: iso,
       updatedAt: iso,
+    });
+  }
+
+  editTimer(input: EditTimerInput): Timer {
+    const timer = this.timerStore.getTimer(input.localId);
+    if (!timer) throw new Error(`timer not found: ${input.localId}`);
+    if (timer.state !== "active") throw new Error(`timer is not active: ${input.localId}`);
+
+    const projectId = input.projectId ?? timer.projectId;
+    const projectChanged = input.projectId != null && input.projectId !== timer.projectId;
+    const explicitModule = input.moduleId !== undefined;
+    const resolved = projectId != null
+      ? this.defaultsStore.resolveForProject({
+          projectId,
+          worktypeId: input.worktypeId ?? (projectChanged ? undefined : timer.worktypeId),
+          moduleId: explicitModule ? input.moduleId ?? undefined : projectChanged ? undefined : timer.moduleId,
+        })
+      : { worktypeId: input.worktypeId ?? timer.worktypeId, moduleId: explicitModule ? input.moduleId ?? undefined : timer.moduleId };
+
+    return this.timerStore.updateTimer(timer.localId, {
+      projectId: input.projectId,
+      worktypeId: input.worktypeId !== undefined || projectChanged ? resolved.worktypeId ?? null : undefined,
+      moduleId: explicitModule ? input.moduleId : projectChanged ? resolved.moduleId ?? null : undefined,
+      updatedAt: (input.now ?? new Date()).toISOString(),
     });
   }
 

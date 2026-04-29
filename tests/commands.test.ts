@@ -48,6 +48,7 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
     editTime: 0,
     setProjectDefaults: 0,
     reloadCredentials: 0,
+    editTimer: 0,
   };
 
   const lastEditPatch: Record<string, unknown>[] = [];
@@ -101,6 +102,10 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
     timerService: {
       startTimer: () => ({ localId: "t1", description: "test" }),
       stopTimer: () => ({ localId: "te1", durationSeconds: 1800 }),
+      editTimer: () => {
+        calls.editTimer++;
+        return { localId: "t1", description: "test timer", elapsedSeconds: 120, state: "active" };
+      },
     },
   } as unknown as ReturnType<typeof import("../src/runtime.js").createRuntime>;
 
@@ -195,6 +200,19 @@ test("intervals-timers shows bright compact active timer rows", async () => {
   assert.ok(notify.message.includes("\u001b[93m2m\u001b[0m"), "should brighten elapsed time");
   assert.ok(notify.message.includes("\u001b[96mt1\u001b[0m"), "should brighten timer id");
   assert.ok(notify.message.includes("test timer"), "should show timer description");
+});
+
+test("intervals-timers edit updates a running timer", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-timers")!;
+  const ctx = fakeCtx();
+  await cmd.handler("edit t1 project_id=10 worktype_id=5 module_id=7", ctx);
+  assert.equal(calls.editTimer, 1);
+  const notify = ctx.notifications[0];
+  assert.ok(notify.message.includes("Timer updated"), "should report timer update");
+  assert.ok(notify.message.includes("test timer"), "should show updated timer");
 });
 
 test("intervals-time defaults to today", async () => {

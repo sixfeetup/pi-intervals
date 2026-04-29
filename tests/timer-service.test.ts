@@ -77,6 +77,56 @@ test("multiple active timers are allowed", () => {
   }
 });
 
+test("editTimer updates active timer project, worktype, and module hints", () => {
+  const { dir, db, service, timerStore } = setup();
+  try {
+    const timer = service.startTimer({ description: "A", now: new Date("2026-04-24T10:00:00Z") });
+
+    const updated = service.editTimer({
+      localId: timer.localId,
+      projectId: 10,
+      worktypeId: 5,
+      moduleId: 7,
+      now: new Date("2026-04-24T10:15:00Z"),
+    });
+
+    assert.equal(updated.projectId, 10);
+    assert.equal(updated.worktypeId, 5);
+    assert.equal(updated.moduleId, 7);
+    assert.equal(updated.state, "active");
+    assert.equal(updated.updatedAt, "2026-04-24T10:15:00.000Z");
+    assert.equal(timerStore.getTimer(timer.localId)?.moduleId, 7);
+  } finally {
+    teardown(dir, db);
+  }
+});
+
+test("editTimer applies project defaults when project changes", () => {
+  const { dir, db, service, defaultsStore } = setup();
+  try {
+    defaultsStore.setProjectDefaults({ projectId: 20, defaultWorktypeId: 6, defaultModuleId: 8 });
+    const timer = service.startTimer({
+      description: "A",
+      projectId: 10,
+      worktypeId: 5,
+      moduleId: 7,
+      now: new Date("2026-04-24T10:00:00Z"),
+    });
+
+    const updated = service.editTimer({
+      localId: timer.localId,
+      projectId: 20,
+      now: new Date("2026-04-24T10:15:00Z"),
+    });
+
+    assert.equal(updated.projectId, 20);
+    assert.equal(updated.worktypeId, 6);
+    assert.equal(updated.moduleId, 8);
+  } finally {
+    teardown(dir, db);
+  }
+});
+
 test("stopTimer by localId creates pending time entry and stops timer", () => {
   const { dir, db, timerStore, timeEntryStore, service } = setup();
   try {
