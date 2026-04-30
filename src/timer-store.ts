@@ -65,6 +65,9 @@ export class TimerStore {
   }
 
   getTimer(localId: string): Timer | undefined {
+    const resolvedLocalId = this.resolveLocalId(localId);
+    if (!resolvedLocalId) return undefined;
+
     const row = this.db.prepare(
       `select
         local_id as localId,
@@ -80,7 +83,7 @@ export class TimerStore {
         created_at as createdAt,
         updated_at as updatedAt
       from timers where local_id = ?`
-    ).get(localId) as
+    ).get(resolvedLocalId) as
       | {
           localId: string;
           projectId: number | null;
@@ -167,6 +170,7 @@ export class TimerStore {
   }
 
   updateTimer(localId: string, patch: UpdateTimerInput): Timer {
+    const resolvedLocalId = this.resolveLocalId(localId) ?? localId;
     const sets: string[] = [];
     const params: unknown[] = [];
 
@@ -192,15 +196,16 @@ export class TimerStore {
     }
 
     sets.push("updated_at = ?");
-    params.push(patch.updatedAt, localId);
+    params.push(patch.updatedAt, resolvedLocalId);
 
     this.db.prepare(`update timers set ${sets.join(", ")} where local_id = ?`).run(...params);
-    const updated = this.getTimer(localId);
+    const updated = this.getTimer(resolvedLocalId);
     if (!updated) throw new Error(`timer not found: ${localId}`);
     return updated;
   }
 
   markTimerStopped(localId: string, stoppedAt: string, elapsedSeconds: number): void {
+    const resolvedLocalId = this.resolveLocalId(localId) ?? localId;
     this.db.prepare(
       `update timers set
         stopped_at = ?,
@@ -208,7 +213,7 @@ export class TimerStore {
         state = 'stopped',
         updated_at = ?
       where local_id = ?`
-    ).run(stoppedAt, elapsedSeconds, stoppedAt, localId);
+    ).run(stoppedAt, elapsedSeconds, stoppedAt, resolvedLocalId);
   }
 
   transaction<T>(fn: () => T): T {
@@ -243,5 +248,21 @@ export class TimerStore {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  private resolveLocalId(localId: string): string | undefined {
+    const exact = this.db.prepare("select local_id as localId from timers where local_id = ?").get(localId) as
+      | { localId: string }
+      | undefined;
+    if (exact) return exact.localId;
+
+    if (!/^[0-9a-f]{8}$/i.test(localId)) return undefined;
+
+    const matches = this.db
+      .prepare("select local_id as localId from timers where local_id like ? order by local_id limit 2")
+      .all(`${localId}%`) as Array<{ localId: string }>;
+    if (matches.length === 1) return matches[0].localId;
+    if (matches.length > 1) throw new Error(`timer id is ambiguous: ${localId}`);
+    return undefined;
   }
 }

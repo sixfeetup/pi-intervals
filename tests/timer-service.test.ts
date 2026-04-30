@@ -31,6 +31,7 @@ test("startTimer requires only description and creates active timer", () => {
   try {
     const timer = service.startTimer({ description: "Work on feature", now: new Date("2026-04-24T10:00:00Z") });
     assert.ok(timer.localId);
+    assert.match(timer.localId, /^[0-9a-f]{8}$/);
     assert.equal(timer.description, "Work on feature");
     assert.equal(timer.state, "active");
     assert.equal(timer.projectId, undefined);
@@ -40,6 +41,32 @@ test("startTimer requires only description and creates active timer", () => {
     const active = timerStore.listActive();
     assert.equal(active.length, 1);
     assert.equal(active[0].localId, timer.localId);
+  } finally {
+    teardown(dir, db);
+  }
+});
+
+test("stopTimer accepts the displayed 8-character prefix for legacy UUID timers", () => {
+  const { dir, db, timerStore, timeEntryStore, service } = setup();
+  try {
+    timerStore.insertTimer({
+      localId: "92afc830-0000-4000-8000-000000000000",
+      description: "Legacy UUID timer",
+      startedAt: "2026-04-24T10:00:00.000Z",
+      createdAt: "2026-04-24T10:00:00.000Z",
+      updatedAt: "2026-04-24T10:00:00.000Z",
+    });
+
+    const entry = service.stopTimer({
+      localId: "92afc830",
+      projectId: 10,
+      worktypeId: 5,
+      now: new Date("2026-04-24T10:30:00Z"),
+    });
+
+    assert.equal(timerStore.getTimer("92afc830-0000-4000-8000-000000000000")?.state, "stopped");
+    assert.equal(entry.sourceTimerId, "92afc830-0000-4000-8000-000000000000");
+    assert.equal(timeEntryStore.listRecent()[0].localId, entry.localId);
   } finally {
     teardown(dir, db);
   }

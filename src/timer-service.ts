@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { CatalogStore } from "./catalog-store.js";
 import type { ProjectDefaultsStore } from "./project-defaults-store.js";
 import type { TimeEntry, TimeEntryStore } from "./time-entry-store.js";
@@ -43,7 +43,7 @@ export class TimerService {
     const now = input.now ?? new Date();
     const iso = now.toISOString();
     return this.timerStore.insertTimer({
-      localId: randomUUID(),
+      localId: this.createTimerLocalId(),
       description: input.description,
       projectId: input.projectId,
       worktypeId: input.worktypeId,
@@ -127,5 +127,13 @@ export class TimerService {
 
   listActive(): Timer[] {
     return this.timerStore.listActive();
+  }
+
+  private createTimerLocalId(): string {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const localId = randomBytes(4).toString("hex");
+      if (!this.timerStore.getTimer(localId)) return localId;
+    }
+    throw new Error("could not generate unique timer id");
   }
 }
