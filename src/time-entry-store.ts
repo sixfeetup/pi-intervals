@@ -144,6 +144,16 @@ export class TimeEntryStore {
     return this.mapRow(row);
   }
 
+  /**
+   * Update duration without changing sync metadata. Used when normalizing
+   * already-persisted entries before sending them to Intervals.
+   */
+  setDurationSeconds(localId: string, durationSeconds: number): void {
+    this.db
+      .prepare("update time_entries set duration_seconds = ?, updated_at = ? where local_id = ?")
+      .run(durationSeconds, new Date().toISOString(), localId);
+  }
+
   updateTimeEntry(localId: string, patch: UpdateTimeEntryInput): TimeEntry {
     const sets: string[] = [];
     const params: unknown[] = [];

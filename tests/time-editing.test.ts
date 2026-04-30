@@ -59,6 +59,36 @@ test("editTime updates duration and description and marks pending", () => {
   }
 });
 
+test("editTime rounds durationSeconds to the nearest 6 minutes", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [{ id: 10, clientId: 1, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Development", active: true, raw: {} }],
+      modules: [],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5 });
+
+    const entry = service.addTime({
+      projectId: 10,
+      date: "2026-04-24",
+      durationSeconds: 3600,
+    });
+
+    const edited = service.editTime({
+      localId: entry.localId,
+      durationSeconds: 113 * 60,
+    });
+
+    assert.equal(edited.durationSeconds, 6840);
+    assert.equal(edited.durationSeconds % 360, 0);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("editTime preserves remoteId and marks syncStatus pending", () => {
   const { dir, db, catalog, defaults, timeEntries, service } = setup();
   try {

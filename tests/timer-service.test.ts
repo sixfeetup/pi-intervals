@@ -397,3 +397,25 @@ test("stopTimer accepts optional description and billable override", () => {
     teardown(dir, db);
   }
 });
+
+test("stopTimer rounds elapsed duration to the nearest 6 minutes", () => {
+  const { dir, db, timerStore, service } = setup();
+  try {
+    const start = new Date("2026-04-24T10:00:00Z");
+    const stop = new Date(start.getTime() + 6797 * 1000); // 1h 53m 17s
+    const timer = service.startTimer({ description: "Precision", now: start });
+
+    const entry = service.stopTimer({
+      localId: timer.localId,
+      projectId: 10,
+      worktypeId: 5,
+      now: stop,
+    });
+
+    assert.equal(entry.durationSeconds, 6840, "time entry duration rounds up to 1h 54m");
+    assert.equal(entry.durationSeconds % 360, 0, "duration must be on a 6-minute boundary");
+    assert.equal(timerStore.getTimer(timer.localId)?.elapsedSeconds, 6797, "timer history preserves actual elapsed seconds");
+  } finally {
+    teardown(dir, db);
+  }
+});

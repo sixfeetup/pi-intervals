@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { CatalogStore } from "./catalog-store.js";
+import { roundDurationSecondsForIntervals } from "./duration-rounding.js";
 import type { ProjectDefaultsStore } from "./project-defaults-store.js";
 import type { TimeEntry, TimeEntryStore } from "./time-entry-store.js";
 import type { Timer, TimerStore } from "./timer-store.js";
@@ -135,7 +136,7 @@ export class TimerService {
         date: stoppedAt.slice(0, 10),
         startAt: timer.startedAt,
         endAt: stoppedAt,
-        durationSeconds: elapsedSeconds,
+        durationSeconds: roundDurationSecondsForIntervals(elapsedSeconds),
         description: input.description ?? timer.description,
         billable: input.billable,
         createdAt: stoppedAt,

@@ -1,4 +1,5 @@
 import type { TimeEntryStore } from "./time-entry-store.js";
+import { roundDurationSecondsForIntervals } from "./duration-rounding.js";
 
 export interface SyncApi {
   createResource(resource: string, body: Record<string, unknown>): Promise<unknown>;
@@ -33,12 +34,17 @@ export async function syncPending(options: SyncPendingOptions): Promise<SyncPend
       continue;
     }
 
+    const durationSeconds = roundDurationSecondsForIntervals(entry.durationSeconds);
+    if (durationSeconds !== entry.durationSeconds) {
+      timeRepo.setDurationSeconds(entry.localId, durationSeconds);
+    }
+
     const payload: Record<string, unknown> = {
       projectid: entry.projectId,
       worktypeid: entry.worktypeId,
       personid: personId,
       date: entry.date,
-      time: entry.durationSeconds / 3600,
+      time: durationSeconds / 3600,
       description: entry.description ?? "",
       billable: entry.billable ? "t" : "f",
     };

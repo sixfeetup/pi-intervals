@@ -89,6 +89,37 @@ test("syncPending creates unsynced pending time entries", async () => {
   }
 });
 
+test("syncPending rounds legacy unrounded durations to 6-minute boundaries before sending", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    timeRepo.insertTimeEntry({
+      localId: "entry-precise",
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 6797, // 1h 53m 17s — 1.887…h — rejected by Intervals
+      description: "Unrounded",
+      billable: true,
+      syncStatus: "pending",
+      createdAt: "2026-04-24T10:00:00Z",
+      updatedAt: "2026-04-24T10:00:00Z",
+    });
+
+    const { api, createCalls } = makeApi({ createResult: { id: 99 } });
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10 });
+
+    assert.equal(result.failed, 0);
+    assert.equal(createCalls[0].body.time, 1.9, "sync payload uses rounded hours");
+
+    const updated = timeRepo.getTimeEntry("entry-precise")!;
+    assert.equal(updated.durationSeconds, 6840, "local row is normalized to a 6-minute boundary");
+    assert.equal(updated.syncStatus, "synced");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("syncPending updates pending time entries that have remoteId", async () => {
   const { dir, db, timeRepo } = setup();
   try {

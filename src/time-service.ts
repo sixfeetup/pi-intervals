@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { CatalogStore } from "./catalog-store.js";
 import type { Db } from "./db.js";
 import { resolveDateRange } from "./date-ranges.js";
+import { roundDurationSecondsForIntervals } from "./duration-rounding.js";
 import type { ProjectDefaultsStore } from "./project-defaults-store.js";
 import type { TimeEntry, TimeEntryStore, UpdateTimeEntryInput } from "./time-entry-store.js";
 import type { TimeRange } from "./types.js";
@@ -88,7 +89,7 @@ export class TimeService {
       worktypeId,
       moduleId: resolved.moduleId,
       date: input.date,
-      durationSeconds: input.durationSeconds,
+      durationSeconds: roundDurationSecondsForIntervals(input.durationSeconds),
       description: input.description,
       billable: input.billable,
       createdAt: now,
@@ -144,7 +145,7 @@ export class TimeService {
     if (input.date !== undefined) patch.date = input.date;
     if (input.startAt !== undefined) patch.startAt = input.startAt;
     if (input.endAt !== undefined) patch.endAt = input.endAt;
-    if (input.durationSeconds !== undefined) patch.durationSeconds = input.durationSeconds;
+    if (input.durationSeconds !== undefined) patch.durationSeconds = roundDurationSecondsForIntervals(input.durationSeconds);
     if (input.description !== undefined) patch.description = input.description;
     if (input.billable !== undefined) patch.billable = input.billable;
 
