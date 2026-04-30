@@ -144,7 +144,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				"Update a running local timer's project, worktype, or module hints. This is local-only and affects the time entry created when the timer is stopped.",
 			promptSnippet: "intervals_edit_timer — update project/worktype/module on a running timer",
 			promptGuidelines: [
-				"Use intervals_edit_timer when the user wants to classify or reclassify a running timer without stopping it.",
+				"Use intervals_edit_timer when the user wants to update a running timer description or classification without stopping it.",
 				"Resolve project/worktype/module IDs with intervals_find_project_context before editing when needed.",
 				"intervals_edit_timer is local-only; it does not sync anything to Intervals until the timer is stopped.",
 			],
@@ -154,15 +154,16 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				project_query: Type.Optional(Type.String({ description: "Project search query to resolve the project" })),
 				worktype_id: Type.Optional(Type.Number({ description: "Worktype ID hint for the timer" })),
 				module_id: Type.Optional(Type.Union([Type.Number(), Type.Null()], { description: "Module ID hint, or null to clear" })),
+				description: Type.Optional(Type.String({ description: "New timer description" })),
 			}),
 			execute: async (_toolCallId, params) => {
 				const projectId = resolveProjectQuery(runtime, params.project_query) ?? params.project_id;
-				const timer = runtime.timerService.editTimer({
-					localId: params.timer_id,
-					projectId,
-					worktypeId: params.worktype_id,
-					moduleId: params.module_id,
-				});
+				const patch: Parameters<typeof runtime.timerService.editTimer>[0] = { localId: params.timer_id };
+				if (projectId !== undefined) patch.projectId = projectId;
+				if (params.worktype_id !== undefined) patch.worktypeId = params.worktype_id;
+				if (params.module_id !== undefined) patch.moduleId = params.module_id;
+				if (params.description !== undefined) patch.description = params.description;
+				const timer = runtime.timerService.editTimer(patch);
 				return textResult(`Timer updated → ${formatTimer(timer)}`, { timer });
 			},
 		}),

@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { getIntervalsHome, loadConfig, resolveCredentials, saveConfig } from "./config.js";
 import { syncProjectsCatalog } from "./catalog-sync.js";
+import { splitCommandArgs } from "./command-args.js";
 import { IntervalsApiClient } from "./intervals-api.js";
 import { formatBrightTimer, formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport } from "./format.js";
 import type { Runtime } from "./runtime.js";
@@ -142,7 +143,7 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
       const arg = args.trim();
 
       if (arg.startsWith("edit ")) {
-        const tokens = arg.slice(5).split(/\s+/);
+        const tokens = splitCommandArgs(arg.slice(5));
         const localId = tokens[0];
         if (!localId) {
           ctx.ui.notify("Usage: /intervals-timers edit <timer_id> [project_id=...] [worktype_id=...] [module_id=...|null]", "error");
@@ -183,6 +184,8 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
               }
               patch.moduleId = num;
             }
+          } else if (key === "description") {
+            patch.description = value;
           } else {
             ctx.ui.notify(`Unknown field: ${key}`, "error");
             return;

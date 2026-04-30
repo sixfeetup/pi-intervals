@@ -53,6 +53,7 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
   };
 
   const lastEditPatch: Record<string, unknown>[] = [];
+  const lastTimerEditPatch: Record<string, unknown>[] = [];
 
   const credentialsConfigured = options.credentialsConfigured ?? true;
   const personId = options.personId ?? 42;
@@ -103,8 +104,9 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
     timerService: {
       startTimer: () => ({ localId: "t1", description: "test" }),
       stopTimer: () => ({ localId: "te1", durationSeconds: 1800 }),
-      editTimer: () => {
+      editTimer: (patch: Record<string, unknown>) => {
         calls.editTimer++;
+        lastTimerEditPatch.push(patch);
         return { localId: "t1", description: "test timer", elapsedSeconds: 120, state: "active" };
       },
       deleteTimer: () => {
@@ -114,7 +116,7 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
     },
   } as unknown as ReturnType<typeof import("../src/runtime.js").createRuntime>;
 
-  return { runtime, calls, lastEditPatch };
+  return { runtime, calls, lastEditPatch, lastTimerEditPatch };
 }
 
 function assertProjectSyncCompleteNotification(ctx: { notifications: Array<{ message: string; type: string }> }) {
@@ -218,6 +220,17 @@ test("intervals-timers edit updates a running timer", async () => {
   const notify = ctx.notifications[0];
   assert.ok(notify.message.includes("Timer updated"), "should report timer update");
   assert.ok(notify.message.includes("test timer"), "should show updated timer");
+});
+
+test("intervals-timers edit updates a running timer description", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls, lastTimerEditPatch } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-timers")!;
+  const ctx = fakeCtx();
+  await cmd.handler('edit t1 description="Updated timer description"', ctx);
+  assert.equal(calls.editTimer, 1);
+  assert.equal(lastTimerEditPatch[0].description, "Updated timer description");
 });
 
 test("intervals-timers delete removes a timer", async () => {

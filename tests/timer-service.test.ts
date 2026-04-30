@@ -128,6 +128,25 @@ test("editTimer updates active timer project, worktype, and module hints", () =>
   }
 });
 
+test("editTimer updates the running timer description", () => {
+  const { dir, db, service, timerStore } = setup();
+  try {
+    const timer = service.startTimer({ description: "Original", now: new Date("2026-04-24T10:00:00Z") });
+
+    const updated = service.editTimer({
+      localId: timer.localId,
+      description: "Updated timer description",
+      now: new Date("2026-04-24T10:15:00Z"),
+    });
+
+    assert.equal(updated.description, "Updated timer description");
+    assert.equal(updated.updatedAt, "2026-04-24T10:15:00.000Z");
+    assert.equal(timerStore.getTimer(timer.localId)?.description, "Updated timer description");
+  } finally {
+    teardown(dir, db);
+  }
+});
+
 test("editTimer applies project defaults when project changes", () => {
   const { dir, db, service, defaultsStore } = setup();
   try {

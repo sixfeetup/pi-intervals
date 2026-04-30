@@ -28,6 +28,7 @@ export interface EditTimerInput {
   projectId?: number;
   worktypeId?: number;
   moduleId?: number | null;
+  description?: string;
   now?: Date;
 }
 
@@ -79,6 +80,7 @@ export class TimerService {
       projectId: input.projectId,
       worktypeId: input.worktypeId !== undefined || projectChanged ? resolved.worktypeId ?? null : undefined,
       moduleId: explicitModule ? input.moduleId : projectChanged ? resolved.moduleId ?? null : undefined,
+      description: input.description,
       updatedAt: (input.now ?? new Date()).toISOString(),
     });
   }

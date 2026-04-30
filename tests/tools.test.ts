@@ -147,6 +147,18 @@ test("intervals_edit_timer updates running timer classification", async () => {
   assert.deepEqual(editCall[0], { localId: "t1", projectId: 10, worktypeId: 5, moduleId: 7 });
 });
 
+test("intervals_edit_timer updates a running timer description", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_edit_timer")!;
+  const result = await tool.execute("call-1", { timer_id: "t1", description: "Updated timer description" }, undefined, undefined, {} as any);
+  assert.ok(String((result.content[0] as { type: "text"; text: string }).text).includes("t1"));
+
+  const editCall = calls.editTimer[0] as [{ localId?: string; description?: string }];
+  assert.deepEqual(editCall[0], { localId: "t1", description: "Updated timer description" });
+});
+
 test("intervals_delete_timer deletes a timer", async () => {
   const { pi, tools } = fakePi();
   const { runtime, calls } = fakeRuntime();
