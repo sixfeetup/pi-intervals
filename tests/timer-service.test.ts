@@ -154,6 +154,61 @@ test("editTimer applies project defaults when project changes", () => {
   }
 });
 
+test("deleteTimer removes an active timer without creating a time entry", () => {
+  const { dir, db, timerStore, timeEntryStore, service } = setup();
+  try {
+    const timer = service.startTimer({ description: "Discard me", now: new Date("2026-04-24T10:00:00Z") });
+
+    const deleted = service.deleteTimer({ localId: timer.localId });
+
+    assert.equal(deleted.localId, timer.localId);
+    assert.equal(timerStore.getTimer(timer.localId), undefined);
+    assert.equal(timeEntryStore.listRecent().length, 0);
+  } finally {
+    teardown(dir, db);
+  }
+});
+
+test("deleteTimer removes a stopped timer when no time entry links to it", () => {
+  const { dir, db, timerStore, service } = setup();
+  try {
+    const timer = timerStore.insertTimer({
+      localId: "orphan01",
+      description: "Orphan stopped timer",
+      startedAt: "2026-04-24T10:00:00.000Z",
+      createdAt: "2026-04-24T10:00:00.000Z",
+      updatedAt: "2026-04-24T10:00:00.000Z",
+    });
+    timerStore.markTimerStopped(timer.localId, "2026-04-24T10:30:00.000Z", 1800);
+
+    const deleted = service.deleteTimer({ localId: timer.localId });
+
+    assert.equal(deleted.localId, timer.localId);
+    assert.equal(timerStore.getTimer(timer.localId), undefined);
+  } finally {
+    teardown(dir, db);
+  }
+});
+
+test("deleteTimer refuses a stopped timer with a linked time entry", () => {
+  const { dir, db, timerStore, timeEntryStore, service } = setup();
+  try {
+    const timer = service.startTimer({ description: "Linked timer", now: new Date("2026-04-24T10:00:00Z") });
+    const entry = service.stopTimer({
+      localId: timer.localId,
+      projectId: 10,
+      worktypeId: 5,
+      now: new Date("2026-04-24T10:30:00Z"),
+    });
+
+    assert.throws(() => service.deleteTimer({ localId: timer.localId }), /linked time entry/);
+    assert.equal(timerStore.getTimer(timer.localId)?.state, "stopped");
+    assert.equal(timeEntryStore.getTimeEntry(entry.localId)?.sourceTimerId, timer.localId);
+  } finally {
+    teardown(dir, db);
+  }
+});
+
 test("stopTimer by localId creates pending time entry and stops timer", () => {
   const { dir, db, timerStore, timeEntryStore, service } = setup();
   try {

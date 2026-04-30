@@ -136,6 +136,14 @@ export class TimeEntryStore {
     return rows.map((r) => this.mapRow(r));
   }
 
+  findBySourceTimerId(sourceTimerId: string): TimeEntry | undefined {
+    const row = this.db.prepare(`${selectColumns} where source_timer_id = ? order by updated_at desc limit 1`).get(sourceTimerId) as
+      | TimeEntryRow
+      | undefined;
+    if (!row) return undefined;
+    return this.mapRow(row);
+  }
+
   updateTimeEntry(localId: string, patch: UpdateTimeEntryInput): TimeEntry {
     const sets: string[] = [];
     const params: unknown[] = [];

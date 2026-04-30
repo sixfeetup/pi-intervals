@@ -78,6 +78,7 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `/intervals-status`                                                                          | Show DB path, credential source, active timers, pending sync count, and last project sync                             |
 | `/intervals-timers [recent]`                                                                 | Show bright, compact active timers or recently stopped timers                                                         |
 | `/intervals-timers edit <timer_id> [project_id=...] [worktype_id=...] [module_id=...\|null]` | Update classification hints on a running timer                                                                        |
+| `/intervals-timers delete <timer_id>`                                                        | Safely delete an active timer or stopped timer with no linked time entry                                              |
 | `/intervals-time <range>`                                                                    | Query local time entries (`today`, `this-week`, `last-week`, `this-month`, `last-month`, or `YYYY-MM-DD..YYYY-MM-DD`) |
 | `/intervals-time edit <id> [field=value ...]`                                                | Edit a local time entry from the command line                                                                         |
 | `/intervals-project-defaults <project_id> <worktype_id> [module_id]`                         | Set default worktype and module for a project                                                                         |
@@ -90,6 +91,7 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `intervals_start_timer`          | Start a local timer with a simple description; project/worktype/module are optional |
 | `intervals_stop_timer`           | Stop a timer, resolve classification, create a pending time entry, and sync         |
 | `intervals_edit_timer`           | Update project/worktype/module hints on a running local timer (local-only)          |
+| `intervals_delete_timer`         | Safely delete an active timer or stopped timer with no linked time entry            |
 | `intervals_add_time`             | Add a completed time entry directly (duration in minutes)                           |
 | `intervals_edit_time`            | Edit an existing local time entry, mark it pending, and re-sync                     |
 | `intervals_query_time`           | Report time entries by date range and project filter (local-only)                   |

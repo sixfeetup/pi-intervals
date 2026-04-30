@@ -31,6 +31,10 @@ export interface EditTimerInput {
   now?: Date;
 }
 
+export interface DeleteTimerInput {
+  localId: string;
+}
+
 export class TimerService {
   constructor(
     private readonly timerStore: TimerStore,
@@ -77,6 +81,19 @@ export class TimerService {
       moduleId: explicitModule ? input.moduleId : projectChanged ? resolved.moduleId ?? null : undefined,
       updatedAt: (input.now ?? new Date()).toISOString(),
     });
+  }
+
+  deleteTimer(input: DeleteTimerInput): Timer {
+    const timer = this.timerStore.getTimer(input.localId);
+    if (!timer) throw new Error(`timer not found: ${input.localId}`);
+
+    const linkedEntry = this.timeEntryStore.findBySourceTimerId(timer.localId);
+    if (timer.state === "stopped" && linkedEntry) {
+      throw new Error(`cannot delete stopped timer with linked time entry: ${linkedEntry.localId}`);
+    }
+
+    this.timerStore.deleteTimer(timer.localId);
+    return timer;
   }
 
   stopTimer(input: StopTimerInput): TimeEntry {

@@ -198,6 +198,22 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
         return;
       }
 
+      if (arg.startsWith("delete ")) {
+        const localId = arg.slice(7).trim();
+        if (!localId) {
+          ctx.ui.notify("Usage: /intervals-timers delete <timer_id>", "error");
+          return;
+        }
+
+        try {
+          const timer = runtime.timerService.deleteTimer({ localId });
+          ctx.ui.notify(`Timer deleted\n${formatBrightTimer(timer)}`, "info");
+        } catch (err) {
+          ctx.ui.notify(`Timer delete failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+        }
+        return;
+      }
+
       const timers = arg === "recent"
         ? runtime.timerStore.listRecent(10)
         : runtime.timerStore.listActive();

@@ -20,6 +20,7 @@ function fakeRuntime() {
     addTime: [] as unknown[],
     editTime: [] as unknown[],
     editTimer: [] as unknown[],
+    deleteTimer: [] as unknown[],
     trySyncNow: 0,
   };
   const runtime = {
@@ -45,6 +46,10 @@ function fakeRuntime() {
       editTimer: (...args: unknown[]) => {
         calls.editTimer.push(args);
         return { localId: "t1", description: "test", projectId: 10, worktypeId: 5, moduleId: 7, startedAt: "2026-04-24T10:00:00Z", elapsedSeconds: 0, state: "active", createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:05:00Z" };
+      },
+      deleteTimer: (...args: unknown[]) => {
+        calls.deleteTimer.push(args);
+        return { localId: "t1", description: "test", startedAt: "2026-04-24T10:00:00Z", elapsedSeconds: 0, state: "active", createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:00:00Z" };
       },
       listActive: () => [],
     },
@@ -86,6 +91,7 @@ test("registers all required intervals tools", () => {
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "intervals_add_time",
+    "intervals_delete_timer",
     "intervals_edit_time",
     "intervals_edit_timer",
     "intervals_find_project_context",
@@ -139,6 +145,18 @@ test("intervals_edit_timer updates running timer classification", async () => {
 
   const editCall = calls.editTimer[0] as [{ localId?: string; projectId?: number; worktypeId?: number; moduleId?: number }];
   assert.deepEqual(editCall[0], { localId: "t1", projectId: 10, worktypeId: 5, moduleId: 7 });
+});
+
+test("intervals_delete_timer deletes a timer", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_delete_timer")!;
+  const result = await tool.execute("call-1", { timer_id: "t1" }, undefined, undefined, {} as any);
+  assert.ok(String((result.content[0] as { type: "text"; text: string }).text).includes("Timer deleted"));
+
+  const deleteCall = calls.deleteTimer[0] as [{ localId?: string }];
+  assert.deepEqual(deleteCall[0], { localId: "t1" });
 });
 
 test("intervals_edit_time converts duration_minutes to seconds and triggers sync", async () => {

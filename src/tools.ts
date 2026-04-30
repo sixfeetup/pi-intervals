@@ -170,6 +170,28 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 
 	pi.registerTool(
 		defineTool({
+			name: "intervals_delete_timer",
+			label: "Delete Intervals timer",
+			description:
+				"Delete a local timer safely. Active timers can be discarded. Stopped timers can only be deleted when they do not have a linked time entry.",
+			promptSnippet: "intervals_delete_timer — safely delete a local timer",
+			promptGuidelines: [
+				"Use intervals_delete_timer to discard an active timer that should not become a time entry.",
+				"Stopped timers are only deleted when no time entry links back to the timer.",
+				"If deletion fails because a linked time entry exists, edit or delete the time entry instead.",
+			],
+			parameters: Type.Object({
+				timer_id: Type.String({ description: "Local ID of the timer to delete" }),
+			}),
+			execute: async (_toolCallId, params) => {
+				const timer = runtime.timerService.deleteTimer({ localId: params.timer_id });
+				return textResult(`Timer deleted → ${formatTimer(timer)}`, { timer });
+			},
+		}),
+	);
+
+	pi.registerTool(
+		defineTool({
 			name: "intervals_add_time",
 			label: "Add Intervals time entry",
 			description:

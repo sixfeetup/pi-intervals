@@ -216,6 +216,11 @@ export class TimerStore {
     ).run(stoppedAt, elapsedSeconds, stoppedAt, resolvedLocalId);
   }
 
+  deleteTimer(localId: string): void {
+    const resolvedLocalId = this.resolveLocalId(localId) ?? localId;
+    this.db.prepare("delete from timers where local_id = ?").run(resolvedLocalId);
+  }
+
   transaction<T>(fn: () => T): T {
     return this.db.transaction(fn)();
   }

@@ -49,6 +49,7 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
     setProjectDefaults: 0,
     reloadCredentials: 0,
     editTimer: 0,
+    deleteTimer: 0,
   };
 
   const lastEditPatch: Record<string, unknown>[] = [];
@@ -104,6 +105,10 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
       stopTimer: () => ({ localId: "te1", durationSeconds: 1800 }),
       editTimer: () => {
         calls.editTimer++;
+        return { localId: "t1", description: "test timer", elapsedSeconds: 120, state: "active" };
+      },
+      deleteTimer: () => {
+        calls.deleteTimer++;
         return { localId: "t1", description: "test timer", elapsedSeconds: 120, state: "active" };
       },
     },
@@ -213,6 +218,19 @@ test("intervals-timers edit updates a running timer", async () => {
   const notify = ctx.notifications[0];
   assert.ok(notify.message.includes("Timer updated"), "should report timer update");
   assert.ok(notify.message.includes("test timer"), "should show updated timer");
+});
+
+test("intervals-timers delete removes a timer", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-timers")!;
+  const ctx = fakeCtx();
+  await cmd.handler("delete t1", ctx);
+  assert.equal(calls.deleteTimer, 1);
+  const notify = ctx.notifications[0];
+  assert.ok(notify.message.includes("Timer deleted"), "should report timer deletion");
+  assert.ok(notify.message.includes("test timer"), "should show deleted timer");
 });
 
 test("intervals-time defaults to today", async () => {
