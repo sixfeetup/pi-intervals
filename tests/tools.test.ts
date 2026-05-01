@@ -116,6 +116,35 @@ test("each tool has a promptSnippet and promptGuidelines", () => {
   }
 });
 
+test("intervals_find_project_context returns global Intervals worktype and module IDs", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  (runtime.catalogStore as unknown as { searchProjectContext: (input: unknown) => unknown }).searchProjectContext = () => [
+    {
+      projectId: 1447065,
+      projectName: "Clubhouse Consulting",
+      clientName: "Alpha Exploration Co.",
+      billable: true,
+      worktypes: [
+        { id: 32088213, worktypeId: 816862, name: "Consulting", active: true },
+      ],
+      modules: [
+        { id: 22457817, moduleId: 560580, name: "foundations", active: true },
+      ],
+    },
+  ];
+  registerIntervalsTools(runtime, pi);
+
+  const tool = tools.find((t) => t.name === "intervals_find_project_context")!;
+  const result = await tool.execute("call-1", { query: "Clubhouse" }, undefined, undefined, {} as any);
+  const text = String((result.content[0] as { type: "text"; text: string }).text);
+
+  assert.ok(text.includes("816862 Consulting"), `expected global worktype id in output, got: ${text}`);
+  assert.ok(text.includes("560580 foundations"), `expected global module id in output, got: ${text}`);
+  assert.ok(!text.includes("32088213"), "should not expose local project_worktypes.id");
+  assert.ok(!text.includes("22457817"), "should not expose local project_modules.id");
+});
+
 test("intervals_start_timer requires only description", async () => {
   const { pi, tools } = fakePi();
   const { runtime } = fakeRuntime();

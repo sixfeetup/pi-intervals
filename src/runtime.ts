@@ -87,6 +87,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       api: apiClient,
       personId,
       limit: 50,
+      catalog: catalogStore,
     });
   }
 

@@ -120,6 +120,127 @@ test("syncPending rounds legacy unrounded durations to 6-minute boundaries befor
   }
 });
 
+test("syncPending fails entry with clear message when catalog shows worktype_id is a local row id", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    const { CatalogStore } = await import("../src/catalog-store.js");
+    const catalog = new CatalogStore(db);
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Alpha", active: true, raw: {} }],
+      projects: [{ id: 1447065, clientId: 1, name: "Clubhouse", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 32088213, projectId: 1447065, worktypeId: 816862, name: "Consulting", active: true, raw: {} }],
+      modules: [{ id: 22457817, projectId: 1447065, moduleId: 560580, name: "foundations", active: true, raw: {} }],
+    });
+
+    timeRepo.insertTimeEntry({
+      localId: "bad-wt",
+      projectId: 1447065,
+      worktypeId: 32088213, // project_worktypes.id instead of global 816862
+      moduleId: 560580,
+      date: "2026-05-01",
+      durationSeconds: 3600,
+      description: "Wrong worktype id",
+      billable: true,
+      syncStatus: "pending",
+      createdAt: "2026-05-01T10:00:00Z",
+      updatedAt: "2026-05-01T10:00:00Z",
+    });
+
+    const { api, createCalls } = makeApi({});
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10, catalog });
+
+    assert.equal(createCalls.length, 0, "should not reach Intervals API with a bad worktype id");
+    assert.equal(result.failed, 1);
+    const row = timeRepo.getTimeEntry("bad-wt")!;
+    assert.equal(row.syncStatus, "failed");
+    assert.match(row.lastSyncError ?? "", /Invalid worktype_id 32088213/);
+    assert.match(row.lastSyncError ?? "", /816862/);
+    assert.match(row.lastSyncError ?? "", /Consulting/);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("syncPending fails entry with clear message when catalog shows module_id is a local row id", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    const { CatalogStore } = await import("../src/catalog-store.js");
+    const catalog = new CatalogStore(db);
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Alpha", active: true, raw: {} }],
+      projects: [{ id: 1447065, clientId: 1, name: "Clubhouse", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 32088213, projectId: 1447065, worktypeId: 816862, name: "Consulting", active: true, raw: {} }],
+      modules: [{ id: 22457817, projectId: 1447065, moduleId: 560580, name: "foundations", active: true, raw: {} }],
+    });
+
+    timeRepo.insertTimeEntry({
+      localId: "bad-mod",
+      projectId: 1447065,
+      worktypeId: 816862,
+      moduleId: 22457817, // project_modules.id instead of global 560580
+      date: "2026-05-01",
+      durationSeconds: 3600,
+      description: "Wrong module id",
+      billable: true,
+      syncStatus: "pending",
+      createdAt: "2026-05-01T10:00:00Z",
+      updatedAt: "2026-05-01T10:00:00Z",
+    });
+
+    const { api, createCalls } = makeApi({});
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10, catalog });
+
+    assert.equal(createCalls.length, 0);
+    assert.equal(result.failed, 1);
+    const row = timeRepo.getTimeEntry("bad-mod")!;
+    assert.match(row.lastSyncError ?? "", /Invalid module_id 22457817/);
+    assert.match(row.lastSyncError ?? "", /560580/);
+    assert.match(row.lastSyncError ?? "", /foundations/);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("syncPending allows entries whose worktype/module IDs match the project's global Intervals IDs", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    const { CatalogStore } = await import("../src/catalog-store.js");
+    const catalog = new CatalogStore(db);
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Alpha", active: true, raw: {} }],
+      projects: [{ id: 1447065, clientId: 1, name: "Clubhouse", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 32088213, projectId: 1447065, worktypeId: 816862, name: "Consulting", active: true, raw: {} }],
+      modules: [{ id: 22457817, projectId: 1447065, moduleId: 560580, name: "foundations", active: true, raw: {} }],
+    });
+
+    timeRepo.insertTimeEntry({
+      localId: "ok-entry",
+      projectId: 1447065,
+      worktypeId: 816862,
+      moduleId: 560580,
+      date: "2026-05-01",
+      durationSeconds: 3600,
+      description: "Correct ids",
+      billable: true,
+      syncStatus: "pending",
+      createdAt: "2026-05-01T10:00:00Z",
+      updatedAt: "2026-05-01T10:00:00Z",
+    });
+
+    const { api, createCalls } = makeApi({ createResult: { id: 42 } });
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10, catalog });
+
+    assert.equal(createCalls.length, 1, "valid entry should still be sent");
+    assert.equal(result.timeEntriesCreated, 1);
+    assert.equal(result.failed, 0);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("syncPending updates pending time entries that have remoteId", async () => {
   const { dir, db, timeRepo } = setup();
   try {
