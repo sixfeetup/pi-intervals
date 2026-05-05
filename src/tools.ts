@@ -352,6 +352,30 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 
 	pi.registerTool(
 		defineTool({
+			name: "intervals_lookup_time_entry",
+			label: "Lookup Intervals time entry",
+			description: "Find the local time entry ID linked to a stopped local timer. Agent-facing lookup to avoid SQLite inspection.",
+			promptSnippet: "intervals_lookup_time_entry — map a stopped timer ID to its linked time entry ID",
+			promptGuidelines: [
+				"Use intervals_lookup_time_entry when the user references a stopped timer but intervals_edit_time needs a time entry ID.",
+				"Do not inspect the SQLite database to map timers to time entries.",
+			],
+			parameters: Type.Object({
+				timer_id: Type.String({ description: "Local timer ID" }),
+			}),
+			execute: async (_toolCallId, params) => {
+				const entry = runtime.timeEntryStore.findBySourceTimerId(params.timer_id);
+				if (!entry) throw new Error(`no time entry linked to timer: ${params.timer_id}`);
+				return textResult(`time_entry_id: ${entry.localId.slice(0, 8)}`, {
+					timeEntryId: entry.localId.slice(0, 8),
+					timerId: params.timer_id,
+				});
+			},
+		}),
+	);
+
+	pi.registerTool(
+		defineTool({
 			name: "intervals_list_time",
 			label: "List recent Intervals time entries",
 			description: "List recent local time entries, including their sync status. Useful for reviewing recently logged time.",

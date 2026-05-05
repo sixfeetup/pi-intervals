@@ -96,6 +96,7 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `intervals_edit_time`            | Edit an existing local time entry, mark it pending, and re-sync                     |
 | `intervals_query_time`           | Report time entries by date range and project filter (local-only)                   |
 | `intervals_list_timers`          | List active or recent local timers                                                  |
+| `intervals_lookup_time_entry`    | Map a stopped local timer ID to the linked local time entry ID                      |
 | `intervals_list_time`            | List recent local time entries with sync status                                     |
 | `intervals_set_project_defaults` | Configure default worktype/module for a project                                     |
 | `intervals_sync_now`             | Immediately retry syncing pending time entries to Intervals                         |

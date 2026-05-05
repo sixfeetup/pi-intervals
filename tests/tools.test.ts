@@ -97,6 +97,7 @@ test("registers all required intervals tools", () => {
     "intervals_find_project_context",
     "intervals_list_time",
     "intervals_list_timers",
+    "intervals_lookup_time_entry",
     "intervals_query_time",
     "intervals_set_project_defaults",
     "intervals_start_timer",
@@ -198,6 +199,20 @@ test("intervals_delete_timer deletes a timer", async () => {
 
   const deleteCall = calls.deleteTimer[0] as [{ localId?: string }];
   assert.deepEqual(deleteCall[0], { localId: "t1" });
+});
+
+test("intervals_lookup_time_entry returns the time entry id for a source timer", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  (runtime.timeEntryStore as any).findBySourceTimerId = () => ({ localId: "4ee96f17" });
+  registerIntervalsTools(runtime, pi);
+
+  const tool = tools.find((t) => t.name === "intervals_lookup_time_entry")!;
+  const result = await tool.execute("call-1", { timer_id: "19ee097c" }, undefined, undefined, {} as any);
+  const text = String((result.content[0] as { type: "text"; text: string }).text);
+
+  assert.equal(text.trim(), "time_entry_id: 4ee96f17");
+  assert.deepEqual((result as any).details, { timeEntryId: "4ee96f17", timerId: "19ee097c" });
 });
 
 test("intervals_edit_time converts duration_minutes to seconds and triggers sync", async () => {
