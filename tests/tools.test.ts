@@ -75,6 +75,7 @@ function fakeRuntime() {
     },
     timeEntryStore: {
       listRecent: () => [],
+      findBySourceTimerId: () => undefined,
     },
     trySyncNow: async () => {
       calls.trySyncNow += 1;
@@ -213,6 +214,45 @@ test("intervals_lookup_time_entry returns the time entry id for a source timer",
 
   assert.equal(text.trim(), "time_entry_id: 4ee96f17");
   assert.deepEqual((result as any).details, { timeEntryId: "4ee96f17", timerId: "19ee097c" });
+});
+
+test("intervals_edit_time passes stop_time to service", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_edit_time")!;
+
+  await tool.execute("call-1", { time_entry_id: "4ee96f17", stop_time: "08:35" }, undefined, undefined, {} as any);
+
+  const editCall = calls.editTime[0] as [{ stopTime?: string }];
+  assert.equal(editCall[0].stopTime, "08:35");
+});
+
+test("intervals_edit_time rejects both time_entry_id and timer_id", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  (runtime.timeEntryStore as any).findBySourceTimerId = () => ({ localId: "from-timer" });
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_edit_time")!;
+
+  await assert.rejects(
+    () => tool.execute("call-1", { time_entry_id: "te1", timer_id: "t1" }, undefined, undefined, {} as any),
+    /cannot specify both time_entry_id and timer_id/,
+  );
+  assert.equal(calls.editTime.length, 0);
+});
+
+test("intervals_edit_time rejects timer_id when no linked entry exists", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_edit_time")!;
+
+  await assert.rejects(
+    () => tool.execute("call-1", { timer_id: "t1" }, undefined, undefined, {} as any),
+    /no time entry linked to timer: t1/,
+  );
+  assert.equal(calls.editTime.length, 0);
 });
 
 test("intervals_edit_time converts duration_minutes to seconds and triggers sync", async () => {

@@ -258,6 +258,35 @@ test("intervals-time defaults to today", async () => {
   assert.ok(notify.message.includes("today"), "should mention today");
 });
 
+test("intervals-time edit parses stop_time", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, lastEditPatch } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-time")!;
+  const ctx = fakeCtx();
+
+  await cmd.handler("edit 4ee96f17 stop_time=08:35", ctx);
+
+  assert.equal(lastEditPatch[0].stopTime, "08:35");
+});
+
+test("intervals-time edit without an id shows edit usage", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-time")!;
+  const ctx = fakeCtx();
+
+  await cmd.handler("edit", ctx);
+
+  assert.equal(calls.editTime, 0);
+  assert.equal(calls.queryTime, 0);
+  assert.deepEqual(ctx.notifications[0], {
+    message: "Usage: /intervals-time edit <time_entry_id> [field=value ...]. Use stop_time=HH:mm to change the local stop time and recalculate duration.",
+    type: "error",
+  });
+});
+
 test("intervals-time edit triggers edit and sync", async () => {
   const { pi, commands } = fakePi();
   const { runtime, calls } = fakeRuntime();

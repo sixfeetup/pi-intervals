@@ -234,11 +234,11 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
     handler: async (args, ctx) => {
       const trimmed = args.trim();
 
-      if (trimmed.startsWith("edit ")) {
-        const tokens = trimmed.slice(5).split(/\s+/);
+      if (trimmed === "edit" || trimmed.startsWith("edit ")) {
+        const tokens = splitCommandArgs(trimmed.slice(4).trimStart());
         const localId = tokens[0];
         if (!localId) {
-          ctx.ui.notify("Usage: /intervals-time edit <time_entry_id> [field=value ...]", "error");
+          ctx.ui.notify("Usage: /intervals-time edit <time_entry_id> [field=value ...]. Use stop_time=HH:mm to change the local stop time and recalculate duration.", "error");
           return;
         }
 
@@ -294,6 +294,8 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
             patch.startAt = value === "" || value === "null" ? null : value;
           } else if (key === "end_at") {
             patch.endAt = value === "" || value === "null" ? null : value;
+          } else if (key === "stop_time") {
+            patch.stopTime = value;
           } else {
             ctx.ui.notify(`Unknown field: ${key}`, "error");
             return;

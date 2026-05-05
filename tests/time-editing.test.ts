@@ -9,6 +9,10 @@ import { ProjectDefaultsStore } from "../src/project-defaults-store.js";
 import { TimeEntryStore } from "../src/time-entry-store.js";
 import { TimeService } from "../src/time-service.js";
 
+function localIso(year: number, monthIndex: number, day: number, hour: number, minute: number, second = 0, millisecond = 0): string {
+  return new Date(year, monthIndex, day, hour, minute, second, millisecond).toISOString();
+}
+
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "pi-intervals-edit-"));
   const db = openDatabase(join(dir, "intervals.db"));
@@ -53,6 +57,105 @@ test("editTime updates duration and description and marks pending", () => {
     assert.equal(edited.syncStatus, "pending");
     assert.equal(edited.projectId, 10);
     assert.equal(edited.worktypeId, 5);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime stopTime updates endAt and rounded duration together", () => {
+  const { dir, db, catalog, timeEntries, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 67184, name: "SFUP001 - System Administration", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 1, projectId: 67184, worktypeId: 118848, name: "Development", active: true, raw: {} }],
+      modules: [{ id: 2, projectId: 67184, moduleId: 183570, name: "Internal Services - Six Feet Up", active: true, raw: {} }],
+    });
+    timeEntries.insertTimeEntry({
+      localId: "4ee96f17",
+      projectId: 67184,
+      worktypeId: 118848,
+      moduleId: 183570,
+      date: "2026-05-05",
+      startAt: localIso(2026, 4, 5, 7, 7, 43, 897),
+      endAt: "2026-05-05T07:22:32.507Z",
+      durationSeconds: 7920,
+      billable: true,
+      syncStatus: "synced",
+      createdAt: "2026-05-05T05:07:43.897Z",
+      updatedAt: "2026-05-05T07:22:32.507Z",
+    });
+
+    const edited = service.editTime({ localId: "4ee96f17", stopTime: "08:35" });
+
+    assert.equal(edited.endAt, "08:35");
+    assert.equal(edited.durationSeconds, 5400);
+    assert.equal(edited.syncStatus, "pending");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime rejects stopTime with explicit durationSeconds", () => {
+  const { dir, db, catalog, timeEntries, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 67184, name: "SFUP001 - System Administration", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 1, projectId: 67184, worktypeId: 118848, name: "Development", active: true, raw: {} }],
+      modules: [],
+    });
+    timeEntries.insertTimeEntry({
+      localId: "4ee96f17",
+      projectId: 67184,
+      worktypeId: 118848,
+      date: "2026-05-05",
+      startAt: localIso(2026, 4, 5, 7, 7, 43, 897),
+      durationSeconds: 7920,
+      billable: true,
+      syncStatus: "synced",
+      createdAt: "2026-05-05T05:07:43.897Z",
+      updatedAt: "2026-05-05T07:22:32.507Z",
+    });
+
+    assert.throws(
+      () => service.editTime({ localId: "4ee96f17", stopTime: "08:35", durationSeconds: 1800 }),
+      /cannot specify both stopTime and durationSeconds/,
+    );
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime stopTime rounds Intervals duration from rawDurationSeconds", () => {
+  const { dir, db, catalog, timeEntries, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 67184, name: "SFUP001 - System Administration", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 1, projectId: 67184, worktypeId: 118848, name: "Development", active: true, raw: {} }],
+      modules: [],
+    });
+    timeEntries.insertTimeEntry({
+      localId: "4ee96f17",
+      projectId: 67184,
+      worktypeId: 118848,
+      date: "2026-05-05",
+      startAt: localIso(2026, 4, 5, 8, 26, 1, 0),
+      durationSeconds: 0,
+      billable: true,
+      syncStatus: "synced",
+      createdAt: "2026-05-05T08:26:01.000Z",
+      updatedAt: "2026-05-05T08:26:01.000Z",
+    });
+
+    const edited = service.editTime({ localId: "4ee96f17", stopTime: "08:35" });
+
+    assert.equal(edited.endAt, "08:35");
+    assert.equal(edited.durationSeconds, 360, "raw 539s should round to 360s for Intervals");
   } finally {
     db.close();
     teardown(dir);

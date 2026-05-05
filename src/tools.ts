@@ -249,12 +249,12 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				"Edit an existing local time entry. If duration_minutes is provided, it is converted to seconds. The entry is marked pending and time-entry sync is triggered. If the entry was previously synced, it will be updated via PUT on the next sync.",
 			promptSnippet: "intervals_edit_time — modify a local time entry and re-sync",
 			promptGuidelines: [
-				"Use intervals_edit_time when the user wants to correct a time entry's duration, description, project, worktype, module, or date.",
+				"Use intervals_edit_time when the user wants to correct a time entry's duration, description, project, worktype, module, date, or local stop time.",
 				"If the entry has a remote_id, it will be updated via PUT during the next sync. If it has no remote_id, it will be created via POST.",
 				"intervals_edit_time converts duration_minutes to seconds and triggers time-entry sync immediately.",
 			],
 			parameters: Type.Object({
-				time_entry_id: Type.String({ description: "Local ID of the time entry to edit" }),
+				time_entry_id: Type.Optional(Type.String({ description: "Local ID of the time entry to edit. Optional when timer_id is provided." })),
 				project_id: Type.Optional(Type.Number({ description: "New project ID" })),
 				project_query: Type.Optional(Type.String({ description: "Project search query to resolve a new project" })),
 				worktype_id: Type.Optional(Type.Number({ description: "New worktype ID" })),
@@ -262,13 +262,29 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				date: Type.Optional(Type.String({ description: "New date (YYYY-MM-DD)" })),
 				start_at: Type.Optional(Type.Union([Type.String(), Type.Null()], { description: "New start time, or null to clear" })),
 				end_at: Type.Optional(Type.Union([Type.String(), Type.Null()], { description: "New end time, or null to clear" })),
+				stop_time: Type.Optional(Type.String({ description: "Local stop time as HH:mm. Recalculates duration from start_at and updates end_at." })),
+				timer_id: Type.Optional(Type.String({ description: "Source timer ID for the time entry to edit, mutually exclusive with time_entry_id" })),
 				duration_minutes: Type.Optional(Type.Number({ description: "New duration in minutes (converted to seconds)" })),
 				description: Type.Optional(Type.Union([Type.String(), Type.Null()], { description: "New description, or null to clear" })),
 				billable: Type.Optional(Type.Boolean({ description: "Whether the entry is billable" })),
 			}),
 			execute: async (_toolCallId, params) => {
+				if (params.time_entry_id && params.timer_id) {
+					throw new Error("cannot specify both time_entry_id and timer_id");
+				}
+				if (!params.time_entry_id && !params.timer_id) {
+					throw new Error("time_entry_id or timer_id is required");
+				}
+
+				const localId = params.time_entry_id
+					?? (() => {
+						const linked = runtime.timeEntryStore.findBySourceTimerId(params.timer_id!);
+						if (!linked) throw new Error(`no time entry linked to timer: ${params.timer_id}`);
+						return linked.localId;
+					})();
+
 				const entry = runtime.timeService.editTime({
-					localId: params.time_entry_id,
+					localId,
 					projectId: params.project_id,
 					projectQuery: params.project_query,
 					worktypeId: params.worktype_id,
@@ -276,6 +292,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					date: params.date,
 					startAt: params.start_at,
 					endAt: params.end_at,
+					stopTime: params.stop_time,
 					durationSeconds: params.duration_minutes != null ? Math.round(params.duration_minutes * 60) : undefined,
 					description: params.description,
 					billable: params.billable,

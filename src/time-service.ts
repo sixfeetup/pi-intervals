@@ -2,6 +2,7 @@ import type { CatalogStore } from "./catalog-store.js";
 import type { Db } from "./db.js";
 import { resolveDateRange } from "./date-ranges.js";
 import { roundDurationSecondsForIntervals } from "./duration-rounding.js";
+import { calculateDurationForLocalStopTime } from "./time-window.js";
 import type { ProjectDefaultsStore } from "./project-defaults-store.js";
 import type { TimeEntry, TimeEntryStore, UpdateTimeEntryInput } from "./time-entry-store.js";
 import type { TimeRange } from "./types.js";
@@ -26,6 +27,8 @@ export interface EditTimeInput {
   date?: string;
   startAt?: string | null;
   endAt?: string | null;
+  /** Bare HH:mm local stop time. Recalculates endAt and durationSeconds together. */
+  stopTime?: string;
   /** Duration in seconds (callers must convert minutes beforehand). */
   durationSeconds?: number;
   description?: string | null;
@@ -105,6 +108,12 @@ export class TimeService {
     if (input.projectId != null && input.projectQuery != null) {
       throw new Error("cannot specify both projectId and projectQuery");
     }
+    if (input.stopTime !== undefined && input.endAt !== undefined) {
+      throw new Error("cannot specify both stopTime and endAt");
+    }
+    if (input.stopTime !== undefined && input.durationSeconds !== undefined) {
+      throw new Error("cannot specify both stopTime and durationSeconds");
+    }
 
     let projectId = existing.projectId;
     if (input.projectQuery != null) {
@@ -137,14 +146,28 @@ export class TimeService {
       moduleId = resolved.moduleId ?? null;
     }
 
+    let calculatedStop: ReturnType<typeof calculateDurationForLocalStopTime> | undefined;
+    if (input.stopTime !== undefined) {
+      calculatedStop = calculateDurationForLocalStopTime({
+        date: input.date ?? existing.date,
+        startAt: input.startAt === null ? undefined : input.startAt ?? existing.startAt,
+        stopTime: input.stopTime,
+      });
+    }
+
     const patch: UpdateTimeEntryInput = {};
     if (projectChanged) patch.projectId = projectId;
     if (worktypeId !== undefined) patch.worktypeId = worktypeId;
     if (moduleId !== undefined) patch.moduleId = moduleId;
     if (input.date !== undefined) patch.date = input.date;
     if (input.startAt !== undefined) patch.startAt = input.startAt;
-    if (input.endAt !== undefined) patch.endAt = input.endAt;
-    if (input.durationSeconds !== undefined) patch.durationSeconds = roundDurationSecondsForIntervals(input.durationSeconds);
+    if (calculatedStop) {
+      patch.endAt = calculatedStop.endAt;
+      patch.durationSeconds = roundDurationSecondsForIntervals(calculatedStop.rawDurationSeconds);
+    } else {
+      if (input.endAt !== undefined) patch.endAt = input.endAt;
+      if (input.durationSeconds !== undefined) patch.durationSeconds = roundDurationSecondsForIntervals(input.durationSeconds);
+    }
     if (input.description !== undefined) patch.description = input.description;
     if (input.billable !== undefined) patch.billable = input.billable;
 
