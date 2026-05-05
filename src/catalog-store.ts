@@ -55,6 +55,25 @@ function toInt(val: boolean): number {
   return val ? 1 : 0;
 }
 
+function normalizeSearchText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/&amp;/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\bsysadmin\b/g, "system administration")
+    .replace(/\bsys admin\b/g, "system administration")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function allTermsMatch(text: string, terms: string[]): boolean {
+  return terms.every((term) => text.includes(term));
+}
+
+function tokenizeNormalizedText(text: string): string[] {
+  return text.split(/\s+/).filter(Boolean);
+}
+
 export class CatalogStore {
   constructor(private readonly db: Db) {}
 
@@ -106,6 +125,7 @@ export class CatalogStore {
     limit?: number;
   } = {}): ProjectContextResult[] {
     const limit = options.limit ?? 20;
+    const fullQuery = normalizeSearchText(options.query ?? "");
 
     let where = "1 = 1";
     const params: (string | number | null)[] = [];
@@ -118,36 +138,64 @@ export class CatalogStore {
       where += " and p.client_id = ?";
       params.push(options.clientId);
     }
-    if (options.query != null && options.query.trim().length > 0) {
-      const terms = options.query.trim().toLowerCase().split(/\s+/).map((t) => `%${t.replace(/%/g, "\\%")}%`);
-      const clause = terms.map(() => "(lower(p.name) like ? or lower(c.name) like ?)").join(" or ");
-      where += ` and (${clause})`;
-      for (const term of terms) {
-        params.push(term, term);
-      }
-    }
 
-    const projectRows = this.db
-      .prepare(
-        `select
+    const projectQuery = `select
           p.id as projectId,
           p.name as projectName,
           p.billable as billable,
           c.id as clientId,
-          c.name as clientName
+          c.name as clientName,
+          coalesce(group_concat(distinct wt.name), '') as worktypeNames,
+          coalesce(group_concat(distinct pm.name), '') as moduleNames
         from projects p
         left join clients c on c.id = p.client_id
+        left join project_worktypes wt on wt.project_id = p.id
+        left join project_modules pm on pm.project_id = p.id
         where ${where}
-        order by p.name
-        limit ?`
-      )
-      .all(...params, limit) as Array<{
+        group by p.id, p.name, p.billable, c.id, c.name
+        order by p.name`;
+
+    const projectRows = this.db
+      .prepare(fullQuery ? projectQuery : `${projectQuery}\n        limit ?`)
+      .all(...(fullQuery ? params : [...params, limit])) as Array<{
         projectId: number;
         projectName: string;
         billable: number;
         clientId: number | null;
         clientName: string | null;
+        worktypeNames: string;
+        moduleNames: string;
       }>;
+
+    const matchedRows = !fullQuery
+      ? projectRows
+      : projectRows
+          .map((row) => {
+            const normalizedProjectName = normalizeSearchText(row.projectName);
+            const normalizedClientName = normalizeSearchText(row.clientName ?? "");
+            const projectAndClientText = `${normalizedProjectName} ${normalizedClientName}`.trim();
+            const searchableText = normalizeSearchText(
+              `${row.projectName} ${row.clientName ?? ""} ${row.worktypeNames} ${row.moduleNames}`
+            );
+            const terms = fullQuery.split(/\s+/).filter(Boolean);
+            const projectTokens = new Set(tokenizeNormalizedText(normalizedProjectName));
+            const exactProjectTokenMatches = terms.filter((term) => projectTokens.has(term)).length;
+            const score = (normalizedProjectName.includes(fullQuery)
+              ? 100
+              : allTermsMatch(normalizedProjectName, terms)
+                ? 80
+                : allTermsMatch(projectAndClientText, terms)
+                  ? 60
+                  : allTermsMatch(searchableText, terms)
+                    ? 40
+                    : 0) + exactProjectTokenMatches * 20;
+
+            return { row, score };
+          })
+          .filter((entry) => entry.score > 0)
+          .sort((a, b) => b.score - a.score || a.row.projectName.localeCompare(b.row.projectName))
+          .slice(0, limit)
+          .map((entry) => entry.row);
 
     const wtStmt = this.db.prepare(
       "select id, worktype_id as worktypeId, name, active from project_worktypes where project_id = ? order by name"
@@ -156,7 +204,7 @@ export class CatalogStore {
       "select id, module_id as moduleId, name, active from project_modules where project_id = ? order by name"
     );
 
-    return projectRows.map((row) => {
+    return matchedRows.map((row) => {
       const worktypes = wtStmt.all(row.projectId) as Array<{ id: number; worktypeId: number | null; name: string; active: number }>;
       const modules = modStmt.all(row.projectId) as Array<{ id: number; moduleId: number | null; name: string; active: number }>;
 
