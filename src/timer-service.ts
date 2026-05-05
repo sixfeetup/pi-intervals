@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import type { CatalogStore } from "./catalog-store.js";
 import { roundDurationSecondsForIntervals } from "./duration-rounding.js";
 import type { ProjectDefaultsStore } from "./project-defaults-store.js";
@@ -128,7 +128,7 @@ export class TimerService {
       this.timerStore.markTimerStopped(timer.localId, stoppedAt, elapsedSeconds);
 
       return this.timeEntryStore.insertTimeEntry({
-        localId: randomUUID(),
+        localId: this.timeEntryStore.createLocalId(),
         sourceTimerId: timer.localId,
         projectId,
         worktypeId,

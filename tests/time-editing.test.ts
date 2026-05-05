@@ -559,3 +559,53 @@ test("editTime throws when both projectId and projectQuery are provided", () => 
     teardown(dir);
   }
 });
+
+test("addTime creates an 8-character local time entry id", () => {
+  const { dir, db, catalog, defaults, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} }],
+      modules: [],
+    });
+    defaults.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5 });
+
+    const entry = service.addTime({ projectId: 10, date: "2026-04-24", durationSeconds: 1800 });
+
+    assert.match(entry.localId, /^[0-9a-f]{8}$/);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("editTime resolves legacy UUID entries by unique 8-character prefix", () => {
+  const { dir, db, catalog, timeEntries, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} }],
+      modules: [],
+    });
+    timeEntries.insertTimeEntry({
+      localId: "4ee96f17-0374-4d1b-a92a-05956213a007",
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-05-05",
+      durationSeconds: 7920,
+      billable: true,
+      createdAt: "2026-05-05T07:07:43.897Z",
+      updatedAt: "2026-05-05T07:07:43.897Z",
+    });
+
+    const edited = service.editTime({ localId: "4ee96f17", durationSeconds: 1800 });
+
+    assert.equal(edited.localId, "4ee96f17-0374-4d1b-a92a-05956213a007");
+    assert.equal(edited.durationSeconds, 1800);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});

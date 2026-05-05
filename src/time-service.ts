@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { CatalogStore } from "./catalog-store.js";
 import type { Db } from "./db.js";
 import { resolveDateRange } from "./date-ranges.js";
@@ -84,7 +83,7 @@ export class TimeService {
 
     const now = new Date().toISOString();
     return this.deps.timeEntryStore.insertTimeEntry({
-      localId: randomUUID(),
+      localId: this.deps.timeEntryStore.createLocalId(),
       projectId: input.projectId,
       worktypeId,
       moduleId: resolved.moduleId,

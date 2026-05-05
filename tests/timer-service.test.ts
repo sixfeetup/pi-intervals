@@ -18,7 +18,7 @@ function setup() {
   const defaultsStore = new ProjectDefaultsStore(db);
   const catalogStore = new CatalogStore(db);
   const service = new TimerService(timerStore, timeEntryStore, defaultsStore, catalogStore);
-  return { dir, db, timerStore, timeEntryStore, service, defaultsStore };
+  return { dir, db, timerStore, timeEntryStore, service, defaultsStore, catalogStore };
 }
 
 function teardown(dir: string, db: ReturnType<typeof openDatabase>) {
@@ -415,6 +415,30 @@ test("stopTimer rounds elapsed duration to the nearest 6 minutes", () => {
     assert.equal(entry.durationSeconds, 6840, "time entry duration rounds up to 1h 54m");
     assert.equal(entry.durationSeconds % 360, 0, "duration must be on a 6-minute boundary");
     assert.equal(timerStore.getTimer(timer.localId)?.elapsedSeconds, 6797, "timer history preserves actual elapsed seconds");
+  } finally {
+    teardown(dir, db);
+  }
+});
+
+test("stopTimer creates a short local time entry id", () => {
+  const { dir, db, catalogStore, defaultsStore, service } = setup();
+  try {
+    catalogStore.replaceCatalog({
+      clients: [],
+      projects: [{ id: 10, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Dev", active: true, raw: {} }],
+      modules: [],
+    });
+    defaultsStore.setProjectDefaults({ projectId: 10, defaultWorktypeId: 5 });
+    const timer = service.startTimer({
+      description: "Investigate cost-saving options",
+      projectId: 10,
+      now: new Date("2026-05-05T07:07:43.897Z"),
+    });
+
+    const entry = service.stopTimer({ localId: timer.localId, now: new Date("2026-05-05T08:37:00.000Z") });
+
+    assert.match(entry.localId, /^[0-9a-f]{8}$/);
   } finally {
     teardown(dir, db);
   }

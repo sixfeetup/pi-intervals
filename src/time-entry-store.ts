@@ -1,4 +1,5 @@
 import type { Db } from "./db.js";
+import { createShortLocalId } from "./local-id.js";
 import type { SyncStatus } from "./types.js";
 
 export interface TimeEntry {
@@ -94,6 +95,26 @@ from time_entries`;
 export class TimeEntryStore {
   constructor(private readonly db: Db) {}
 
+  createLocalId(): string {
+    return createShortLocalId((candidate) => this.getTimeEntry(candidate) != null);
+  }
+
+  resolveLocalId(localId: string): string | undefined {
+    const exact = this.db.prepare("select local_id as localId from time_entries where local_id = ?").get(localId) as
+      | { localId: string }
+      | undefined;
+    if (exact) return exact.localId;
+
+    if (!/^[0-9a-f]{8}$/i.test(localId)) return undefined;
+
+    const matches = this.db
+      .prepare("select local_id as localId from time_entries where lower(local_id) like lower(?) order by local_id limit 2")
+      .all(`${localId}%`) as Array<{ localId: string }>;
+    if (matches.length === 1) return matches[0].localId;
+    if (matches.length > 1) throw new Error(`time entry id is ambiguous: ${localId}`);
+    return undefined;
+  }
+
   insertTimeEntry(input: InsertTimeEntryInput): TimeEntry {
     this.db.prepare(
       `insert into time_entries (
@@ -126,7 +147,9 @@ export class TimeEntryStore {
   }
 
   getTimeEntry(localId: string): TimeEntry | undefined {
-    const row = this.db.prepare(`${selectColumns} where local_id = ?`).get(localId) as TimeEntryRow | undefined;
+    const resolvedLocalId = this.resolveLocalId(localId);
+    if (!resolvedLocalId) return undefined;
+    const row = this.db.prepare(`${selectColumns} where local_id = ?`).get(resolvedLocalId) as TimeEntryRow | undefined;
     if (!row) return undefined;
     return this.mapRow(row);
   }
@@ -149,12 +172,17 @@ export class TimeEntryStore {
    * already-persisted entries before sending them to Intervals.
    */
   setDurationSeconds(localId: string, durationSeconds: number): void {
+    const resolvedLocalId = this.resolveLocalId(localId);
+    if (!resolvedLocalId) throw new Error(`time entry not found: ${localId}`);
     this.db
       .prepare("update time_entries set duration_seconds = ?, updated_at = ? where local_id = ?")
-      .run(durationSeconds, new Date().toISOString(), localId);
+      .run(durationSeconds, new Date().toISOString(), resolvedLocalId);
   }
 
   updateTimeEntry(localId: string, patch: UpdateTimeEntryInput): TimeEntry {
+    const resolvedLocalId = this.resolveLocalId(localId);
+    if (!resolvedLocalId) throw new Error(`time entry not found: ${localId}`);
+
     const sets: string[] = [];
     const params: unknown[] = [];
 
@@ -201,10 +229,10 @@ export class TimeEntryStore {
     const updatedAt = new Date().toISOString();
     sets.push("updated_at = ?");
     params.push(updatedAt);
-    params.push(localId);
+    params.push(resolvedLocalId);
 
     this.db.prepare(`update time_entries set ${sets.join(", ")} where local_id = ?`).run(...params);
-    const updated = this.getTimeEntry(localId);
+    const updated = this.getTimeEntry(resolvedLocalId);
     if (!updated) {
       throw new Error(`time entry not found: ${localId}`);
     }
@@ -231,19 +259,23 @@ export class TimeEntryStore {
   }
 
   setRemoteTime(localId: string, remoteId: number): void {
+    const resolvedLocalId = this.resolveLocalId(localId);
+    if (!resolvedLocalId) throw new Error(`time entry not found: ${localId}`);
     this.db
       .prepare(
         `update time_entries set remote_id = ?, sync_status = 'synced', sync_attempts = 0, last_sync_error = null, updated_at = ? where local_id = ?`
       )
-      .run(remoteId, new Date().toISOString(), localId);
+      .run(remoteId, new Date().toISOString(), resolvedLocalId);
   }
 
   markSyncFailed(localId: string, error: string): void {
+    const resolvedLocalId = this.resolveLocalId(localId);
+    if (!resolvedLocalId) throw new Error(`time entry not found: ${localId}`);
     this.db
       .prepare(
         `update time_entries set sync_status = 'failed', sync_attempts = sync_attempts + 1, last_sync_error = ?, updated_at = ? where local_id = ?`
       )
-      .run(error, new Date().toISOString(), localId);
+      .run(error, new Date().toISOString(), resolvedLocalId);
   }
 
   private mapRow(row: TimeEntryRow): TimeEntry {
