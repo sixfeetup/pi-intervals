@@ -329,19 +329,26 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
 
       const arg = trimmed || "today";
 
-      if (arg === "today") range = "today";
-      else if (arg === "this-week") range = "this_week";
-      else if (arg === "last-week") range = "last_week";
-      else if (arg === "this-month") range = "this_month";
-      else if (arg === "last-month") range = "last_month";
-      else if (arg.includes("..")) {
+      const normalizedArg = arg.replace(/_/g, "-");
+
+      if (normalizedArg === "today") range = "today";
+      else if (normalizedArg === "yesterday") range = "yesterday";
+      else if (normalizedArg === "this-week") range = "this_week";
+      else if (normalizedArg === "last-week") range = "last_week";
+      else if (normalizedArg === "this-month") range = "this_month";
+      else if (normalizedArg === "last-month") range = "last_month";
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(arg)) {
+        range = "custom";
+        startDate = arg;
+        endDate = arg;
+      } else if (arg.includes("..")) {
         const [start, end] = arg.split("..");
         range = "custom";
         startDate = start;
         endDate = end;
       } else {
         ctx.ui.notify(
-          `Unknown range: ${arg}. Use today, this-week, last-week, this-month, last-month, or YYYY-MM-DD..YYYY-MM-DD`,
+          `Unknown range: ${arg}. Use today, yesterday, this-week, last-week, this-month, last-month, YYYY-MM-DD, or YYYY-MM-DD..YYYY-MM-DD`,
           "error",
         );
         return;

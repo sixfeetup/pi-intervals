@@ -24,6 +24,11 @@ export function resolveDateRange(input: {
 
   if (input.range === "today") return { startDate: ymd(today), endDate: ymd(today) };
 
+  if (input.range === "yesterday") {
+    const yesterday = utcDate(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 1);
+    return { startDate: ymd(yesterday), endDate: ymd(yesterday) };
+  }
+
   const day = today.getUTCDay();
   const mondayOffset = day === 0 ? -6 : 1 - day;
   const monday = utcDate(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + mondayOffset);

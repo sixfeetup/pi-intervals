@@ -19,3 +19,10 @@ test("this_week uses Monday through Sunday", () => {
 test("custom requires dates", () => {
   assert.throws(() => resolveDateRange({ range: "custom", now: new Date("2026-04-24T12:00:00Z") }), /start_date and end_date/);
 });
+
+test("resolveDateRange supports yesterday", () => {
+  assert.deepEqual(
+    resolveDateRange({ range: "yesterday" as any, now: new Date("2026-05-05T12:00:00Z") }),
+    { startDate: "2026-05-04", endDate: "2026-05-04" },
+  );
+});

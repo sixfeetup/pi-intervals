@@ -319,7 +319,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				"If the user asks 'how much time did I log', use intervals_query_time with range=today or range=this_week.",
 			],
 			parameters: Type.Object({
-				range: StringEnum(["today", "this_week", "last_week", "this_month", "last_month", "custom"], {
+				range: StringEnum(["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "custom"], {
 					description: "Predefined date range",
 				}),
 				start_date: Type.Optional(Type.String({ description: "Required when range=custom (YYYY-MM-DD)" })),

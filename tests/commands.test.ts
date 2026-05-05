@@ -258,6 +258,30 @@ test("intervals-time defaults to today", async () => {
   assert.ok(notify.message.includes("today"), "should mention today");
 });
 
+test("intervals-time accepts yesterday", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-time")!;
+  const ctx = fakeCtx();
+
+  await cmd.handler("yesterday", ctx);
+
+  assert.equal(calls.queryTime, 1);
+});
+
+test("intervals-time accepts a single YYYY-MM-DD date", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-time")!;
+  const ctx = fakeCtx();
+
+  await cmd.handler("2026-05-04", ctx);
+
+  assert.equal(calls.queryTime, 1);
+});
+
 test("intervals-time edit parses stop_time", async () => {
   const { pi, commands } = fakePi();
   const { runtime, lastEditPatch } = fakeRuntime();
