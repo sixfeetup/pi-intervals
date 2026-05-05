@@ -89,6 +89,38 @@ test("formatTimeEntry shows failed status and last error", () => {
   assert.ok(formatted.includes("Network timeout"));
 });
 
+test("formatTimeEntry starts with short id and includes time window", () => {
+  const entry: TimeEntry = {
+    localId: "4ee96f17",
+    remoteId: 114010155,
+    sourceTimerId: "19ee097c",
+    projectId: 67184,
+    worktypeId: 118848,
+    moduleId: 183570,
+    date: "2026-05-05",
+    startAt: "07:07",
+    endAt: "08:35",
+    durationSeconds: 5400,
+    description: "Investigate cost-saving options",
+    billable: true,
+    syncStatus: "synced",
+    syncAttempts: 0,
+    createdAt: "2026-05-05T07:07:43.897Z",
+    updatedAt: "2026-05-05T08:35:00.000Z",
+  };
+
+  const formatted = formatTimeEntry({
+    ...entry,
+    projectName: "SFUP001 - System Administration",
+    worktypeName: "Development",
+    moduleName: "Internal Services - Six Feet Up",
+  });
+
+  assert.ok(formatted.startsWith("4ee96f17 2026-05-05 07:07-08:35 1h 30m"), formatted);
+  assert.ok(!formatted.includes("timer="), formatted);
+  assert.ok(!formatted.includes("remote="), formatted);
+});
+
 test("formatTimeReport renders total and grouped projects", () => {
   const report: TimeReport = {
     startDate: "2026-04-24",

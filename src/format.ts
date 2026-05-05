@@ -2,6 +2,7 @@ import type { Timer } from "./timer-store.js";
 import type { TimeEntry } from "./time-entry-store.js";
 import type { TimeReport } from "./time-service.js";
 import type { SyncPendingResult } from "./sync-service.js";
+import { formatTimeEntryWindow } from "./time-window.js";
 
 export function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -43,12 +44,15 @@ function getTimerElapsedSeconds(timer: Timer, now: Date): number {
 export function formatTimeEntry(
   entry: TimeEntry & { projectName?: string; worktypeName?: string; moduleName?: string },
 ): string {
+  const id = entry.localId.slice(0, 8);
+  const window = formatTimeEntryWindow(entry);
+  const windowPart = window ? ` ${window}` : "";
   const dur = formatDuration(entry.durationSeconds);
   const project = entry.projectName ?? `Project ${entry.projectId}`;
   const worktype = entry.worktypeName ?? `Worktype ${entry.worktypeId}`;
   const mod = entry.moduleName ? `/${entry.moduleName}` : "";
   const desc = entry.description ? ` | ${entry.description}` : "";
-  let line = `${entry.date} ${dur} ${project}${mod} (${worktype})${desc}`;
+  let line = `${id} ${entry.date}${windowPart} ${dur} ${project}${mod} (${worktype})${desc}`;
   if (entry.syncStatus === "failed" && entry.lastSyncError) {
     line += ` [failed: ${entry.lastSyncError}]`;
   } else {
