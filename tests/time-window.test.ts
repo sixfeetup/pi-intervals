@@ -53,6 +53,26 @@ test("calculateDurationForLocalStopTime calculates duration from local HH:mm sto
   assert.notEqual(result.rawDurationSeconds, result.durationSeconds);
 });
 
+test("calculateDurationForLocalStopTime uses local start date when stored date is UTC date", () => {
+  const previousTz = process.env.TZ;
+  process.env.TZ = "America/New_York";
+  try {
+    const startAt = new Date(2026, 4, 4, 22, 0, 0, 0).toISOString();
+    const result = calculateDurationForLocalStopTime({
+      date: "2026-05-05",
+      startAt,
+      stopTime: "22:35",
+    });
+
+    assert.equal(result.endAt, "22:35");
+    assert.equal(result.rawDurationSeconds, 35 * 60);
+    assert.equal(result.durationSeconds, 35 * 60);
+  } finally {
+    if (previousTz === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTz;
+  }
+});
+
 test("calculateDurationForLocalStopTime rejects stop times before local start time", () => {
   assert.throws(
     () => calculateDurationForLocalStopTime({

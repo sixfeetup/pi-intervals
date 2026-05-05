@@ -80,8 +80,8 @@ export function calculateDurationForLocalStopTime(input: {
   const start = parseLocalStartAt(input.date, input.startAt);
   const { hour, minute } = parseStrictLocalTime(input.stopTime, "stop_time");
 
-  const { year, month, day } = parseStrictLocalDate(input.date);
-  const stop = new Date(year, month - 1, day, hour, minute, 0, 0);
+  parseStrictLocalDate(input.date);
+  const stop = new Date(start.getFullYear(), start.getMonth(), start.getDate(), hour, minute, 0, 0);
   const rawDurationSeconds = Math.floor((stop.getTime() - start.getTime()) / 1000);
   if (rawDurationSeconds < 0) {
     throw new Error(`stop_time ${input.stopTime} is before start time ${formatLocalTimeOfDay(input.startAt)}`);
