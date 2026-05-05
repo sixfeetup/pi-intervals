@@ -2,6 +2,14 @@ import { randomBytes } from "node:crypto";
 
 const SHORT_ID_RE = /^[0-9a-f]{8}$/i;
 
+export function isShortLocalId(localId: string): boolean {
+  return SHORT_ID_RE.test(localId);
+}
+
+export function formatEditableLocalId(localId: string): string {
+  return isShortLocalId(localId) ? localId.slice(0, 8) : localId;
+}
+
 export function createShortLocalId(
   exists: (candidate: string) => boolean,
   nextCandidate: () => string = () => randomBytes(4).toString("hex"),

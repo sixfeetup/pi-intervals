@@ -44,25 +44,41 @@ function parseStrictLocalDate(value: string): { year: number; month: number; day
   return { year, month, day };
 }
 
+function parseStrictLocalTime(value: string, label: string): { hour: number; minute: number } {
+  const match = value.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) throw new Error(`${label} must be HH:mm local time`);
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
+    throw new Error(`${label} must be HH:mm local time`);
+  }
+
+  return { hour, minute };
+}
+
+function parseLocalStartAt(date: string, startAt: string): Date {
+  const bareTimeMatch = startAt.match(/^(\d{1,2}):(\d{2})$/);
+  if (bareTimeMatch) {
+    const { year, month, day } = parseStrictLocalDate(date);
+    const { hour, minute } = parseStrictLocalTime(startAt, "start_at");
+    return new Date(year, month - 1, day, hour, minute, 0, 0);
+  }
+
+  const parsed = new Date(startAt);
+  if (!Number.isFinite(parsed.getTime())) throw new Error(`invalid start_at: ${startAt}`);
+  return parsed;
+}
+
 export function calculateDurationForLocalStopTime(input: {
   date: string;
   startAt?: string;
   stopTime: string;
 }): { endAt: string; durationSeconds: number; rawDurationSeconds: number } {
   if (!input.startAt) throw new Error("start_at is required to calculate duration from stop_time");
-  if (!/^\d{1,2}:\d{2}$/.test(input.stopTime)) {
-    throw new Error("stop_time must be HH:mm local time");
-  }
 
-  const start = new Date(input.startAt);
-  if (!Number.isFinite(start.getTime())) throw new Error(`invalid start_at: ${input.startAt}`);
-
-  const [hourText, minuteText] = input.stopTime.split(":");
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
-    throw new Error("stop_time must be HH:mm local time");
-  }
+  const start = parseLocalStartAt(input.date, input.startAt);
+  const { hour, minute } = parseStrictLocalTime(input.stopTime, "stop_time");
 
   const { year, month, day } = parseStrictLocalDate(input.date);
   const stop = new Date(year, month - 1, day, hour, minute, 0, 0);

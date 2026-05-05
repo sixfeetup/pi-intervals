@@ -121,6 +121,31 @@ test("formatTimeEntry starts with short id and includes time window", () => {
   assert.ok(!formatted.includes("remote="), formatted);
 });
 
+test("formatTimeEntry shows legacy full local ids without slicing", () => {
+  const entry: TimeEntry = {
+    localId: "4ee96f17-0374-4d1b-a92a-05956213a007",
+    projectId: 67184,
+    worktypeId: 118848,
+    date: "2026-05-05",
+    startAt: "07:07",
+    endAt: "08:35",
+    durationSeconds: 5400,
+    billable: true,
+    syncStatus: "pending",
+    syncAttempts: 0,
+    createdAt: "2026-05-05T07:07:43.897Z",
+    updatedAt: "2026-05-05T08:35:00.000Z",
+  };
+
+  const formatted = formatTimeEntry({
+    ...entry,
+    projectName: "SFUP001 - System Administration",
+    worktypeName: "Development",
+  });
+
+  assert.ok(formatted.startsWith(`${entry.localId} 2026-05-05 07:07-08:35 1h 30m`), formatted);
+});
+
 test("formatTimeReport renders total and grouped projects", () => {
   const report: TimeReport = {
     startDate: "2026-04-24",

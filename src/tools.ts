@@ -2,7 +2,9 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import { defineTool, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer } from "./format.js";
+import { formatEditableLocalId } from "./local-id.js";
 import type { Runtime } from "./runtime.js";
+import { buildStopTimeEditSummary, formatStopTimeEditSummary } from "./time-edit-feedback.js";
 
 function resolveProjectQuery(
 	runtime: Runtime,
@@ -276,12 +278,13 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					throw new Error("time_entry_id or timer_id is required");
 				}
 
+				const linkedEntry = params.timer_id ? runtime.timeEntryStore.findBySourceTimerId(params.timer_id) : undefined;
 				const localId = params.time_entry_id
 					?? (() => {
-						const linked = runtime.timeEntryStore.findBySourceTimerId(params.timer_id!);
-						if (!linked) throw new Error(`no time entry linked to timer: ${params.timer_id}`);
-						return linked.localId;
+						if (!linkedEntry) throw new Error(`no time entry linked to timer: ${params.timer_id}`);
+						return linkedEntry.localId;
 					})();
+				const existingEntry = params.stop_time ? linkedEntry ?? runtime.timeEntryStore.getTimeEntry(localId) : undefined;
 
 				const entry = runtime.timeService.editTime({
 					localId,
@@ -298,10 +301,18 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					billable: params.billable,
 				});
 				const syncResult = await runtime.trySyncNow();
-				return textResult(
-					`Time entry updated: ${entry.localId}\n${formatSyncSummary(syncResult)}`,
-					{ entry, sync: syncResult },
-				);
+				const lines = [`Time entry updated: ${formatEditableLocalId(entry.localId)}`];
+				if (params.stop_time && existingEntry) {
+					lines.push(formatStopTimeEditSummary(buildStopTimeEditSummary({
+						existingEntry,
+						date: params.date,
+						startAt: params.start_at,
+						stopTime: params.stop_time,
+						roundedDurationSeconds: entry.durationSeconds,
+					})));
+				}
+				lines.push(formatSyncSummary(syncResult));
+				return textResult(lines.join("\n"), { entry, sync: syncResult });
 			},
 		}),
 	);
@@ -383,8 +394,9 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 			execute: async (_toolCallId, params) => {
 				const entry = runtime.timeEntryStore.findBySourceTimerId(params.timer_id);
 				if (!entry) throw new Error(`no time entry linked to timer: ${params.timer_id}`);
-				return textResult(`time_entry_id: ${entry.localId.slice(0, 8)}`, {
-					timeEntryId: entry.localId.slice(0, 8),
+				const timeEntryId = formatEditableLocalId(entry.localId);
+				return textResult(`time_entry_id: ${timeEntryId}`, {
+					timeEntryId,
 					timerId: params.timer_id,
 				});
 			},

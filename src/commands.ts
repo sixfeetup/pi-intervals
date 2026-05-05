@@ -4,7 +4,9 @@ import { syncProjectsCatalog } from "./catalog-sync.js";
 import { splitCommandArgs } from "./command-args.js";
 import { IntervalsApiClient } from "./intervals-api.js";
 import { formatBrightTimer, formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport } from "./format.js";
+import { formatEditableLocalId } from "./local-id.js";
 import type { Runtime } from "./runtime.js";
+import { buildStopTimeEditSummary, formatStopTimeEditSummary } from "./time-edit-feedback.js";
 import type { TimeRange } from "./types.js";
 
 export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): void {
@@ -303,6 +305,7 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
         }
 
         try {
+          const existingEntry = patch.stopTime ? runtime.timeEntryStore.getTimeEntry(localId) : undefined;
           const entry = runtime.timeService.editTime(patch as any);
           const syncResult = await runtime.trySyncNow();
           const formattedEntry = formatTimeEntry({
@@ -313,10 +316,18 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
               ? runtime.catalogStore.getModule(entry.projectId, entry.moduleId)?.name
               : undefined,
           });
-          ctx.ui.notify(
-            `Updated ${entry.localId.slice(0, 8)}\n${formattedEntry}\n${formatSyncSummary(syncResult)}`,
-            "info",
-          );
+          const lines = [`Updated ${formatEditableLocalId(entry.localId)}`, formattedEntry];
+          if (patch.stopTime && existingEntry) {
+            lines.push(formatStopTimeEditSummary(buildStopTimeEditSummary({
+              existingEntry,
+              date: patch.date as string | undefined,
+              startAt: patch.startAt as string | null | undefined,
+              stopTime: patch.stopTime as string,
+              roundedDurationSeconds: entry.durationSeconds,
+            })));
+          }
+          lines.push(formatSyncSummary(syncResult));
+          ctx.ui.notify(lines.join("\n"), "info");
         } catch (err) {
           ctx.ui.notify(`Edit failed: ${err instanceof Error ? err.message : String(err)}`, "error");
         }

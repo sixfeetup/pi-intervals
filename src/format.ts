@@ -2,6 +2,7 @@ import type { Timer } from "./timer-store.js";
 import type { TimeEntry } from "./time-entry-store.js";
 import type { TimeReport } from "./time-service.js";
 import type { SyncPendingResult } from "./sync-service.js";
+import { formatEditableLocalId } from "./local-id.js";
 import { formatTimeEntryWindow } from "./time-window.js";
 
 export function formatDuration(totalSeconds: number): string {
@@ -44,7 +45,7 @@ function getTimerElapsedSeconds(timer: Timer, now: Date): number {
 export function formatTimeEntry(
   entry: TimeEntry & { projectName?: string; worktypeName?: string; moduleName?: string },
 ): string {
-  const id = entry.localId.slice(0, 8);
+  const id = formatEditableLocalId(entry.localId);
   const window = formatTimeEntryWindow(entry);
   const windowPart = window ? ` ${window}` : "";
   const dur = formatDuration(entry.durationSeconds);

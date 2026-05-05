@@ -76,6 +76,9 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
     catalogStore: {
       searchProjectContext: () => [],
       getLastProjectSync: () => "2026-04-24T10:00:00.000Z",
+      getProject: () => undefined,
+      getWorktype: () => undefined,
+      getModule: () => undefined,
     },
     timerStore: {
       listActive: () => [{ localId: "t1", description: "test timer", elapsedSeconds: 120, state: "active" }],
@@ -84,7 +87,7 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
     timeEntryStore: {
       pendingForSync: () => [{ localId: "te1" }],
       listRecent: () => [{ localId: "te1", durationSeconds: 3600 }],
-      getTimeEntry: () => ({ localId: "te1", durationSeconds: 3600, syncStatus: "pending" }),
+      getTimeEntry: () => ({ localId: "te1", date: "2026-05-05", startAt: "07:07", durationSeconds: 3600, syncStatus: "pending" }),
       updateTimeEntry: () => ({ localId: "te1", durationSeconds: 3600, syncStatus: "pending" }),
     },
     timeService: {
@@ -292,6 +295,41 @@ test("intervals-time edit parses stop_time", async () => {
   await cmd.handler("edit 4ee96f17 stop_time=08:35", ctx);
 
   assert.equal(lastEditPatch[0].stopTime, "08:35");
+});
+
+test("intervals-time edit stop_time notification includes timing summary", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime } = fakeRuntime();
+  (runtime.timeEntryStore as any).getTimeEntry = () => ({
+    localId: "4ee96f17",
+    date: "2026-05-05",
+    startAt: "07:07",
+  });
+  (runtime.timeService as any).editTime = () => ({
+    localId: "4ee96f17",
+    projectId: 67184,
+    worktypeId: 118848,
+    date: "2026-05-05",
+    startAt: "07:07",
+    endAt: "08:35",
+    durationSeconds: 5400,
+    billable: true,
+    syncStatus: "pending",
+    syncAttempts: 0,
+    createdAt: "2026-05-05T07:07:00.000Z",
+    updatedAt: "2026-05-05T08:35:00.000Z",
+  });
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-time")!;
+  const ctx = fakeCtx();
+
+  await cmd.handler("edit 4ee96f17 stop_time=08:35", ctx);
+
+  const notify = ctx.notifications[0];
+  assert.match(notify.message, /start:/);
+  assert.match(notify.message, /end:/);
+  assert.match(notify.message, /raw duration:/);
+  assert.match(notify.message, /rounded duration:/);
 });
 
 test("intervals-time edit without an id shows edit usage", async () => {

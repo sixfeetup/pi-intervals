@@ -75,6 +75,7 @@ function fakeRuntime() {
     },
     timeEntryStore: {
       listRecent: () => [],
+      getTimeEntry: () => ({ localId: "te1", date: "2026-04-24", startAt: "07:07" }),
       findBySourceTimerId: () => undefined,
     },
     trySyncNow: async () => {
@@ -216,6 +217,21 @@ test("intervals_lookup_time_entry returns the time entry id for a source timer",
   assert.deepEqual((result as any).details, { timeEntryId: "4ee96f17", timerId: "19ee097c" });
 });
 
+test("intervals_lookup_time_entry returns full legacy UUID local ids", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  const localId = "4ee96f17-0374-4d1b-a92a-05956213a007";
+  (runtime.timeEntryStore as any).findBySourceTimerId = () => ({ localId });
+  registerIntervalsTools(runtime, pi);
+
+  const tool = tools.find((t) => t.name === "intervals_lookup_time_entry")!;
+  const result = await tool.execute("call-1", { timer_id: "19ee097c" }, undefined, undefined, {} as any);
+  const text = String((result.content[0] as { type: "text"; text: string }).text);
+
+  assert.equal(text.trim(), `time_entry_id: ${localId}`);
+  assert.deepEqual((result as any).details, { timeEntryId: localId, timerId: "19ee097c" });
+});
+
 test("intervals_edit_time passes stop_time to service", async () => {
   const { pi, tools } = fakePi();
   const { runtime, calls } = fakeRuntime();
@@ -226,6 +242,40 @@ test("intervals_edit_time passes stop_time to service", async () => {
 
   const editCall = calls.editTime[0] as [{ stopTime?: string }];
   assert.equal(editCall[0].stopTime, "08:35");
+});
+
+test("intervals_edit_time with stop_time returns timing summary lines", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  (runtime.timeEntryStore as any).getTimeEntry = () => ({
+    localId: "4ee96f17",
+    date: "2026-05-05",
+    startAt: "07:07",
+  });
+  (runtime.timeService as any).editTime = () => ({
+    localId: "4ee96f17",
+    projectId: 10,
+    worktypeId: 5,
+    date: "2026-05-05",
+    startAt: "07:07",
+    endAt: "08:35",
+    durationSeconds: 5400,
+    billable: true,
+    syncStatus: "pending",
+    syncAttempts: 0,
+    createdAt: "2026-05-05T07:07:00.000Z",
+    updatedAt: "2026-05-05T08:35:00.000Z",
+  });
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_edit_time")!;
+
+  const result = await tool.execute("call-1", { time_entry_id: "4ee96f17", stop_time: "08:35" }, undefined, undefined, {} as any);
+  const text = String((result.content[0] as { type: "text"; text: string }).text);
+
+  assert.match(text, /start:/);
+  assert.match(text, /end:/);
+  assert.match(text, /raw duration:/);
+  assert.match(text, /rounded duration:/);
 });
 
 test("intervals_edit_time rejects both time_entry_id and timer_id", async () => {
