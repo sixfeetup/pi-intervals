@@ -94,6 +94,9 @@ For retroactive entries, resolve required project/worktype before creating the e
 - Use `intervals_edit_time` to fix failed or incorrect entries, then verify with `intervals_list_time` or `intervals_query_time`.
 - Use `intervals_sync_now` after adding/editing/stopping if the tool did not already sync, or when the user explicitly asks to retry sync.
 - Use `intervals_find_project_context` before relying on a project/worktype/module ID that came from text rather than a previous time entry.
+- Do not read `~/.pi/intervals/intervals.db` directly for normal workflows. Use `intervals_list_time`, `intervals_query_time`, and `intervals_lookup_time_entry`; these expose local time entry IDs, local start/end windows, sync status, and timer-to-entry mapping without direct DB access.
+- When the user asks to change an entry's stop/end time using a bare time like `08:35`, use `stop_time` instead of raw `end_at`. `stop_time` is interpreted as local time and recalculates duration from the entry's stored start time.
+- If the user gives a stopped timer ID when editing a derived time entry, use `intervals_lookup_time_entry(timer_id=...)` or `intervals_edit_time(timer_id=...)`; do not map the timer to a time entry through SQLite.
 
 ## ID Safety
 
@@ -122,3 +125,6 @@ Keep the response concise.
 - Using a local catalog row ID where Intervals expects a remote worktype/module ID.
 - Setting project defaults without explicit user confirmation.
 - Reclassifying a pre-classified timer at stop time based on recent work or current repo path. Preserve timer classification unless the user asks to change it.
+- Setting `end_at` without updating duration. Use `stop_time` for user-facing stop-time changes.
+- Treating stored UTC ISO timestamps as the user's local wall-clock time. For bare user times, use local-time semantic fields.
+- Querying SQLite directly to find a time entry ID that official tools now expose.

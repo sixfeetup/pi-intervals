@@ -79,9 +79,15 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `/intervals-timers [recent]`                                                                 | Show bright, compact active timers or recently stopped timers                                                         |
 | `/intervals-timers edit <timer_id> [project_id=...] [worktype_id=...] [module_id=...\|null] [description=...]` | Update description or classification hints on a running timer                                                         |
 | `/intervals-timers delete <timer_id>`                                                        | Safely delete an active timer or stopped timer with no linked time entry                                              |
-| `/intervals-time <range>`                                                                    | Query local time entries (`today`, `this-week`, `last-week`, `this-month`, `last-month`, or `YYYY-MM-DD..YYYY-MM-DD`) |
+| `/intervals-time <range>`                                                                    | Query local time entries by range or date                                                                             |
 | `/intervals-time edit <id> [field=value ...]`                                                | Edit a local time entry from the command line                                                                         |
 | `/intervals-project-defaults <project_id> <worktype_id> [module_id]`                         | Set default worktype and module for a project                                                                         |
+
+### `/intervals-time` notes
+
+- Time-entry rows start with the local short time entry ID used by `/intervals-time edit` and `intervals_edit_time`.
+- Use `stop_time=HH:mm` for local stop-time changes; this updates the stored end time and recalculates rounded duration together.
+- Supported ranges: `today`, `yesterday`, `this-week`, `last-week`, `this-month`, `last-month`, `YYYY-MM-DD`, and `YYYY-MM-DD..YYYY-MM-DD`.
 
 ## Agent tools
 
@@ -93,7 +99,7 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `intervals_edit_timer`           | Update description or project/worktype/module hints on a running local timer        |
 | `intervals_delete_timer`         | Safely delete an active timer or stopped timer with no linked time entry            |
 | `intervals_add_time`             | Add a completed time entry directly (duration in minutes)                           |
-| `intervals_edit_time`            | Edit an existing local time entry, mark it pending, and re-sync                     |
+| `intervals_edit_time`            | Edit an existing local time entry by short ID or linked timer ID; use `stop_time` for local stop-time changes that recalculate duration |
 | `intervals_query_time`           | Report time entries by date range and project filter (local-only)                   |
 | `intervals_list_timers`          | List active or recent local timers                                                  |
 | `intervals_lookup_time_entry`    | Map a stopped local timer ID to the linked local time entry ID                      |
