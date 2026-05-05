@@ -89,7 +89,7 @@ For retroactive entries, resolve required project/worktype before creating the e
 ## Tool Guidelines
 
 - Use `intervals_start_timer` for new active work. Include project/worktype/module hints when confidently inferred from recent history.
-- Use `intervals_stop_timer` when the user finishes work. Re-check recent entries if classification is missing or stale.
+- Use `intervals_stop_timer` when the user finishes work. Re-check recent entries if classification is missing or stale. NB: Do not modify the timer project, worktype or module if it already set.
 - Use `intervals_add_time` for retroactive entries. Convert durations to minutes.
 - Use `intervals_edit_time` to fix failed or incorrect entries, then verify with `intervals_list_time` or `intervals_query_time`.
 - Use `intervals_sync_now` after adding/editing/stopping if the tool did not already sync, or when the user explicitly asks to retry sync.
@@ -121,3 +121,4 @@ Keep the response concise.
 - Forgetting to preserve the module from similar prior work.
 - Using a local catalog row ID where Intervals expects a remote worktype/module ID.
 - Setting project defaults without explicit user confirmation.
+- Reclassifying a pre-classified timer at stop time based on recent work or current repo path. Preserve timer classification unless the user asks to change it.
