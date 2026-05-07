@@ -368,7 +368,7 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
       try {
         const report = runtime.timeService.queryTime({ range, start_date: startDate, end_date: endDate });
         const label = range.replace(/_/g, "-");
-        ctx.ui.notify(`${label}\n${formatTimeReport(report)}`, "info");
+        ctx.ui.notify(formatTimeReport(report, { label }), "info");
       } catch (err) {
         ctx.ui.notify(`Query failed: ${err instanceof Error ? err.message : String(err)}`, "error");
       }

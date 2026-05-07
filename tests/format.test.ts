@@ -12,6 +12,10 @@ import type { TimeEntry } from "../src/time-entry-store.js";
 import type { TimeReport } from "../src/time-service.js";
 import type { SyncPendingResult } from "../src/sync-service.js";
 
+function stripAnsi(text: string): string {
+  return text.replace(/\u001b\[[0-9;]*m/g, "");
+}
+
 test("formatDuration renders hours and minutes compactly", () => {
   assert.equal(formatDuration(0), "0m");
   assert.equal(formatDuration(59), "0m");
@@ -146,7 +150,7 @@ test("formatTimeEntry shows legacy full local ids without slicing", () => {
   assert.ok(formatted.startsWith(`${entry.localId} 2026-05-05 07:07-08:35 1h 30m`), formatted);
 });
 
-test("formatTimeReport renders total and grouped projects", () => {
+test("formatTimeReport renders project-first totals with nested entries for a day", () => {
   const report: TimeReport = {
     startDate: "2026-04-24",
     endDate: "2026-04-24",
@@ -157,6 +161,8 @@ test("formatTimeReport renders total and grouped projects", () => {
         projectId: 10,
         worktypeId: 5,
         date: "2026-04-24",
+        startAt: "09:00",
+        endAt: "10:00",
         durationSeconds: 3600,
         billable: true,
         syncStatus: "synced",
@@ -172,6 +178,8 @@ test("formatTimeReport renders total and grouped projects", () => {
         projectId: 20,
         worktypeId: 6,
         date: "2026-04-24",
+        startAt: "12:00",
+        endAt: "12:30",
         durationSeconds: 1800,
         billable: true,
         syncStatus: "pending",
@@ -184,16 +192,74 @@ test("formatTimeReport renders total and grouped projects", () => {
       },
     ],
     byProject: [
-      { projectId: 10, projectName: "Website", totalSeconds: 3600 },
       { projectId: 20, projectName: "API", totalSeconds: 1800 },
+      { projectId: 10, projectName: "Website", totalSeconds: 3600 },
     ],
   };
-  const text = formatTimeReport(report);
-  assert.ok(text.includes("Total: 1h 30m"));
-  assert.ok(text.includes("Website: 1h"));
-  assert.ok(text.includes("API: 30m"));
-  assert.ok(text.includes("Homepage"));
-  assert.ok(text.includes("Auth endpoint"));
+
+  const text = stripAnsi(formatTimeReport(report, { label: "today" }));
+
+  assert.match(text, /^today\s+2026-04-24 .*Total: 1h 30m .*2 entries .*2 projects/);
+  assert.ok(text.indexOf("Website") < text.indexOf("API"), text);
+  assert.match(text, /Website.*1h/);
+  assert.match(text, /API.*30m/);
+  assert.match(text, /e1\s+09:00-10:00\s+1h\s+✓ Homepage/);
+  assert.match(text, /e2\s+12:00-12:30\s+30m\s+● Auth endpoint/);
+  assert.ok(!text.includes("e1 2026-04-24"), text);
+});
+
+test("formatTimeReport includes entry dates for multi-day ranges", () => {
+  const report: TimeReport = {
+    startDate: "2026-04-01",
+    endDate: "2026-04-30",
+    totalSeconds: 5400,
+    entries: [
+      {
+        localId: "e1",
+        projectId: 10,
+        worktypeId: 5,
+        date: "2026-04-03",
+        startAt: "09:00",
+        endAt: "10:00",
+        durationSeconds: 3600,
+        billable: true,
+        syncStatus: "synced",
+        syncAttempts: 0,
+        createdAt: "2026-04-03T10:00:00Z",
+        updatedAt: "2026-04-03T10:00:00Z",
+        projectName: "Website",
+        worktypeName: "Development",
+        description: "Homepage",
+      },
+      {
+        localId: "e2",
+        projectId: 10,
+        worktypeId: 5,
+        date: "2026-04-24",
+        startAt: "12:00",
+        endAt: "12:30",
+        durationSeconds: 1800,
+        billable: true,
+        syncStatus: "failed",
+        syncAttempts: 2,
+        lastSyncError: "Network timeout",
+        createdAt: "2026-04-24T12:00:00Z",
+        updatedAt: "2026-04-24T12:00:00Z",
+        projectName: "Website",
+        worktypeName: "Development",
+        description: "Auth endpoint",
+      },
+    ],
+    byProject: [
+      { projectId: 10, projectName: "Website", totalSeconds: 5400 },
+    ],
+  };
+
+  const text = stripAnsi(formatTimeReport(report));
+
+  assert.match(text, /2026-04-01 \.\. 2026-04-30 .*Total: 1h 30m/);
+  assert.match(text, /e1\s+2026-04-03\s+09:00-10:00\s+1h\s+✓ Homepage/);
+  assert.match(text, /e2\s+2026-04-24\s+12:00-12:30\s+30m\s+✕ Auth endpoint \(Network timeout\)/);
 });
 
 test("formatSyncSummary renders compact counts", () => {

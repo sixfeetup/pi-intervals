@@ -24,6 +24,7 @@ const ANSI_RESET = "\u001b[0m";
 const ANSI_BRIGHT_GREEN = "\u001b[92m";
 const ANSI_BRIGHT_YELLOW = "\u001b[93m";
 const ANSI_BRIGHT_CYAN = "\u001b[96m";
+const ANSI_BRIGHT_RED = "\u001b[91m";
 const ANSI_DIM = "\u001b[2m";
 
 export function formatBrightTimer(timer: Timer, now = new Date()): string {
@@ -62,19 +63,69 @@ export function formatTimeEntry(
   return line;
 }
 
-export function formatTimeReport(report: TimeReport): string {
-  const lines: string[] = [];
-  lines.push(`${report.startDate} .. ${report.endDate} | Total: ${formatDuration(report.totalSeconds)}`);
-  for (const group of report.byProject) {
-    lines.push(`  ${group.projectName}: ${formatDuration(group.totalSeconds)}`);
-  }
-  if (report.entries.length > 0) {
+export function formatTimeReport(report: TimeReport, options: { label?: string } = {}): string {
+  const singleDay = report.startDate === report.endDate;
+  const period = singleDay ? report.startDate : `${report.startDate} .. ${report.endDate}`;
+  const label = options.label ? `${options.label}  ` : "";
+  const lines: string[] = [
+    `${ANSI_BRIGHT_CYAN}${label}${period}${ANSI_RESET}  ${ANSI_BRIGHT_YELLOW}Total: ${formatDuration(report.totalSeconds)}${ANSI_RESET} ${ANSI_DIM}· ${report.entries.length} ${pluralize(report.entries.length, "entry", "entries")} · ${report.byProject.length} ${pluralize(report.byProject.length, "project", "projects")}${ANSI_RESET}`,
+  ];
+
+  for (const group of [...report.byProject].sort((a, b) => b.totalSeconds - a.totalSeconds)) {
+    const entries = report.entries
+      .filter((entry) => entry.projectId === group.projectId)
+      .sort(compareTimeReportEntries);
+
     lines.push("");
-    for (const entry of report.entries) {
-      lines.push(`  ${formatTimeEntry(entry)}`);
+    lines.push(`${ANSI_BRIGHT_GREEN}● ${group.projectName}${ANSI_RESET}  ${ANSI_BRIGHT_YELLOW}${formatDuration(group.totalSeconds)}${ANSI_RESET}`);
+
+    const classification = formatSharedClassification(entries);
+    if (classification) {
+      lines.push(`  ${ANSI_DIM}${classification}${ANSI_RESET}`);
+    }
+
+    for (const entry of entries) {
+      lines.push(formatTimeReportEntryRow(entry, { includeDate: !singleDay }));
     }
   }
+
   return lines.join("\n");
+}
+
+function compareTimeReportEntries(a: TimeReport["entries"][number], b: TimeReport["entries"][number]): number {
+  return `${a.date} ${a.startAt ?? ""} ${a.createdAt}`.localeCompare(`${b.date} ${b.startAt ?? ""} ${b.createdAt}`);
+}
+
+function formatSharedClassification(entries: TimeReport["entries"]): string {
+  const labels = new Set(entries.map((entry) => {
+    const parts = [entry.moduleName, entry.worktypeName].filter(Boolean);
+    return parts.join(" · ");
+  }).filter(Boolean));
+
+  if (labels.size !== 1) return "";
+  return [...labels][0];
+}
+
+function formatTimeReportEntryRow(entry: TimeReport["entries"][number], options: { includeDate: boolean }): string {
+  const id = formatEditableLocalId(entry.localId);
+  const date = options.includeDate ? `${entry.date} ` : "";
+  const window = formatTimeEntryWindow(entry);
+  const windowPart = window ? `${window} ` : "";
+  const description = entry.description || "(no description)";
+  const failedError = entry.syncStatus === "failed" && entry.lastSyncError ? ` (${entry.lastSyncError})` : "";
+
+  return `  ${ANSI_BRIGHT_CYAN}${id}${ANSI_RESET}  ${ANSI_DIM}${date}${windowPart}${ANSI_RESET}${ANSI_BRIGHT_YELLOW}${formatDuration(entry.durationSeconds)}${ANSI_RESET} ${formatSyncStatusSymbol(entry.syncStatus)} ${description}${failedError}`;
+}
+
+function formatSyncStatusSymbol(status: TimeEntry["syncStatus"]): string {
+  if (status === "synced") return `${ANSI_BRIGHT_GREEN}✓${ANSI_RESET}`;
+  if (status === "pending") return `${ANSI_BRIGHT_YELLOW}●${ANSI_RESET}`;
+  if (status === "failed") return `${ANSI_BRIGHT_RED}✕${ANSI_RESET}`;
+  return `${ANSI_BRIGHT_YELLOW}!${ANSI_RESET}`;
+}
+
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
 }
 
 export function formatSyncSummary(summary: SyncPendingResult): string {
