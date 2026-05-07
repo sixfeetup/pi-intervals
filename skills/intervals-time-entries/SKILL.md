@@ -25,12 +25,21 @@ Use this skill for any request involving Intervals time tracking, including:
 Always gather context before creating, editing, or syncing a time entry or timer:
 
 1. Check recent time entries with `intervals_list_time`.
-2. Check active/recent timers with `intervals_list_timers` when the request involves timers or could be affected by an active timer.
+2. Check active/recent timers with `intervals_list_timers` when the request involves timers or could be affected by an active timer. Before starting a new timer, if any active timer exists, ask whether it should be stopped first.
 3. Use `intervals_query_time` for date-scoped requests such as “today”, “yesterday”, “this week”, or when recent entries are not enough.
 4. Use `intervals_find_project_context` to resolve project names, ticket prefixes, worktypes, modules, and ambiguous project matches.
 5. Use the current working directory and path as an additional clue. For example, if the user is working under a client/project repo, prefer recent entries and project matches related to that repo.
 
 Do not skip the recent-entry check just because the user supplied a ticket key or project name.
+
+## Active Timer Check Before Starting
+
+When the user asks to start a new timer:
+
+1. Check active timers first with `intervals_list_timers`.
+2. If any active timer is running, ask whether to stop it before starting the new timer. Name the active timer(s) and keep the question concise.
+3. Do not start the new timer until the user answers, unless the user already explicitly said to keep existing timers running or to allow multiple active timers.
+4. If the user says to stop an active timer, stop it with the best available classification, then start the requested new timer.
 
 ## Classification Process
 
@@ -88,7 +97,7 @@ For retroactive entries, resolve required project/worktype before creating the e
 
 ## Tool Guidelines
 
-- Use `intervals_start_timer` for new active work. Include project/worktype/module hints when confidently inferred from recent history.
+- Use `intervals_start_timer` for new active work only after checking active timers and asking whether any running timer should be stopped first. Include project/worktype/module hints when confidently inferred from recent history.
 - Use `intervals_stop_timer` when the user finishes work. Re-check recent entries if classification is missing or stale. NB: Do not modify the timer project, worktype or module if it already set.
 - Use `intervals_add_time` for retroactive entries. Convert durations to minutes.
 - Use `intervals_edit_time` to fix failed or incorrect entries, then verify with `intervals_list_time` or `intervals_query_time`.
@@ -119,6 +128,7 @@ Keep the response concise.
 
 ## Common Mistakes
 
+- Starting a new timer while another timer is active without first asking whether the active timer should be stopped.
 - Starting a timer from only the ticket key without checking recent entries.
 - Asking the user to disambiguate before checking history and current path.
 - Forgetting to preserve the module from similar prior work.
