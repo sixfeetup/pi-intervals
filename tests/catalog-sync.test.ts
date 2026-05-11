@@ -33,6 +33,29 @@ test("syncProjectsCatalog fetches all reference resources", async () => {
   }
 });
 
+test("syncProjectsCatalog stores project billable status from the API", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-intervals-sync-billable-"));
+  try {
+    const db = openDatabase(join(dir, "intervals.db"));
+    const store = new CatalogStore(db);
+    const api = {
+      listResource: async (resource: string) => {
+        if (resource === "client") return [{ id: 1, name: "Acme", active: "t" }];
+        if (resource === "project") return [{ id: 10, clientid: 1, name: "Internal", active: "t", billable: "f" }];
+        return [];
+      },
+    };
+
+    await syncProjectsCatalog(api, store);
+
+    assert.equal(store.getProject(10)?.billable, false);
+    assert.equal(store.searchProjectContext({ projectId: 10 })[0]?.billable, false);
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("syncProjectsCatalog stores active projects and their active classifications only", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-intervals-sync-active-"));
   try {

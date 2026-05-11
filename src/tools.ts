@@ -118,7 +118,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				worktype_id: Type.Optional(Type.Number({ description: "Worktype ID for the time entry" })),
 				module_id: Type.Optional(Type.Number({ description: "Module ID for the time entry" })),
 				description: Type.Optional(Type.String({ description: "Override description for the time entry" })),
-				billable: Type.Optional(Type.Boolean({ description: "Whether the time entry is billable", default: true })),
+				billable: Type.Optional(Type.Boolean({ description: "Optional billable override. When omitted, the project's catalog billable setting is used." })),
 			}),
 			execute: async (_toolCallId, params) => {
 				const projectId = resolveProjectQuery(runtime, params.project_query) ?? params.project_id;
@@ -216,7 +216,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				date: Type.String({ description: "Date for the time entry (YYYY-MM-DD)" }),
 				duration_minutes: Type.Number({ description: "Duration in minutes (will be converted to seconds)" }),
 				description: Type.Optional(Type.String({ description: "Description of the work" })),
-				billable: Type.Optional(Type.Boolean({ description: "Whether the time entry is billable", default: true })),
+				billable: Type.Optional(Type.Boolean({ description: "Optional billable override. When omitted, the project's catalog billable setting is used." })),
 			}),
 			execute: async (_toolCallId, params) => {
 				const entry = runtime.timeService.addTime({

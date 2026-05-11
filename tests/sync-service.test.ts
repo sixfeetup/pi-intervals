@@ -89,6 +89,33 @@ test("syncPending creates unsynced pending time entries", async () => {
   }
 });
 
+test("syncPending sends unbillable pending entries as billable=f", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    timeRepo.insertTimeEntry({
+      localId: "entry-unbillable",
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Internal work",
+      billable: false,
+      syncStatus: "pending",
+      createdAt: "2026-04-24T10:00:00Z",
+      updatedAt: "2026-04-24T10:00:00Z",
+    });
+
+    const { api, createCalls } = makeApi({ createResult: { id: 100 } });
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10 });
+
+    assert.equal(result.failed, 0);
+    assert.equal(createCalls[0].body.billable, "f");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("syncPending rounds legacy unrounded durations to 6-minute boundaries before sending", async () => {
   const { dir, db, timeRepo } = setup();
   try {

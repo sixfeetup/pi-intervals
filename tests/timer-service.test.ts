@@ -378,6 +378,30 @@ test("stopTimer uses default module but explicit worktype when only worktype pro
   }
 });
 
+test("stopTimer uses project billable setting when billable is omitted", () => {
+  const { dir, db, service, catalogStore } = setup();
+  try {
+    catalogStore.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [{ id: 10, clientId: 1, name: "Internal", active: true, billable: false, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Development", active: true, raw: {} }],
+      modules: [],
+    });
+    const timer = service.startTimer({ description: "A", now: new Date("2026-04-24T10:00:00Z") });
+
+    const entry = service.stopTimer({
+      localId: timer.localId,
+      projectId: 10,
+      worktypeId: 5,
+      now: new Date("2026-04-24T10:30:00Z"),
+    });
+
+    assert.equal(entry.billable, false);
+  } finally {
+    teardown(dir, db);
+  }
+});
+
 test("stopTimer accepts optional description and billable override", () => {
   const { dir, db, service } = setup();
   try {

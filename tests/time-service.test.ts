@@ -52,6 +52,31 @@ test("addTime uses project defaults when worktype and module omitted", () => {
   }
 });
 
+test("addTime uses project billable setting when billable is omitted", () => {
+  const { dir, db, catalog, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [{ id: 10, clientId: 1, name: "Internal", active: true, billable: false, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Development", active: true, raw: {} }],
+      modules: [],
+    });
+
+    const entry = service.addTime({
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Internal work",
+    });
+
+    assert.equal(entry.billable, false);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("addTime requires worktype when no project default exists", () => {
   const { dir, db, catalog, service } = setup();
   try {

@@ -42,7 +42,7 @@ export class TimerService {
     private readonly timerStore: TimerStore,
     private readonly timeEntryStore: TimeEntryStore,
     private readonly defaultsStore: ProjectDefaultsStore,
-    private readonly _catalogStore: CatalogStore,
+    private readonly catalogStore: CatalogStore,
   ) {}
 
   startTimer(input: StartTimerInput): Timer {
@@ -123,6 +123,7 @@ export class TimerService {
     if (worktypeId == null) throw new Error("worktype is required");
 
     const moduleId = resolved.moduleId;
+    const projectBillable = this.catalogStore.getProject(projectId)?.billable;
 
     return this.timerStore.transaction(() => {
       this.timerStore.markTimerStopped(timer.localId, stoppedAt, elapsedSeconds);
@@ -138,7 +139,7 @@ export class TimerService {
         endAt: stoppedAt,
         durationSeconds: roundDurationSecondsForIntervals(elapsedSeconds),
         description: input.description ?? timer.description,
-        billable: input.billable,
+        billable: input.billable ?? projectBillable,
         createdAt: stoppedAt,
         updatedAt: stoppedAt,
       });

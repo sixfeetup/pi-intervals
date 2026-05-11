@@ -85,6 +85,7 @@ export class TimeService {
     }
 
     const now = new Date().toISOString();
+    const projectBillable = this.deps.catalogStore.getProject(input.projectId)?.billable;
     return this.deps.timeEntryStore.insertTimeEntry({
       localId: this.deps.timeEntryStore.createLocalId(),
       projectId: input.projectId,
@@ -93,7 +94,7 @@ export class TimeService {
       date: input.date,
       durationSeconds: roundDurationSecondsForIntervals(input.durationSeconds),
       description: input.description,
-      billable: input.billable,
+      billable: input.billable ?? projectBillable,
       createdAt: now,
       updatedAt: now,
     });
