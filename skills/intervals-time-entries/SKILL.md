@@ -7,7 +7,7 @@ description: Use when starting, stopping, editing, syncing, reviewing, or retroa
 
 ## Overview
 
-Time entry classification should be history-guided, not guess-driven. Before creating or changing timers/time entries, inspect recent local timers and time entries, use similar prior work to choose project/worktype/module, and only ask the user when history and context cannot resolve ambiguity.
+Time entry classification should be history-guided, not guess-driven. Never assume a timer should be started just because work is beginning. Before creating or changing timers/time entries, inspect recent local timers and time entries, ask for confirmation before starting any timer unless the user explicitly requested it, and use similar prior work to choose project/worktype/module.
 
 ## When to Use
 
@@ -32,9 +32,18 @@ Always gather context before creating, editing, or syncing a time entry or timer
 
 Do not skip the recent-entry check just because the user supplied a ticket key or project name.
 
+## No Implicit Timer Starts
+
+When work is beginning but the user did not explicitly ask to start a timer:
+
+1. Ask whether an Intervals timer should be started for this work.
+2. Do not start a timer until the user answers yes.
+3. Do not treat a coding task, project name, ticket key, current directory, or prior time-entry pattern as permission to start a timer.
+4. If the user says no or does not answer, continue the work without starting a timer.
+
 ## Active Timer Check Before Starting
 
-When the user asks to start a new timer:
+Before starting any timer after explicit user request or confirmation:
 
 1. Check active timers first with `intervals_list_timers`.
 2. If any active timer is running, ask whether to stop it before starting the new timer. Name the active timer(s) and keep the question concise.
@@ -86,9 +95,9 @@ Ask one concise question and include the leading candidates.
 
 A “new project” means there is no sufficiently similar recent time entry/timer for the project/worktype/module combination.
 
-When starting a timer for a new project:
+When starting a timer for a new project after the user explicitly requested or confirmed the timer:
 
-1. Start the timer promptly if the description is clear; do not block timer start solely because defaults are unknown.
+1. Do not block timer start solely because defaults are unknown.
 2. Resolve project/worktype/module as far as possible from `intervals_find_project_context` and path clues.
 3. Ask the user whether they want to set default worktype and module for that project, especially if they had to choose them manually.
 4. If the user confirms, call `intervals_set_project_defaults` with the confirmed worktype/module.
@@ -97,7 +106,7 @@ For retroactive entries, resolve required project/worktype before creating the e
 
 ## Tool Guidelines
 
-- Use `intervals_start_timer` for new active work only after checking active timers and asking whether any running timer should be stopped first. Include project/worktype/module hints when confidently inferred from recent history.
+- Use `intervals_start_timer` only when the user explicitly requested a timer or answered yes when asked whether to start one. First check active timers and ask whether any running timer should be stopped. Include project/worktype/module hints when confidently inferred from recent history.
 - Use `intervals_stop_timer` when the user finishes work. Re-check recent entries if classification is missing or stale. NB: Do not modify the timer project, worktype or module if it already set.
 - Use `intervals_add_time` for retroactive entries. Convert durations to minutes.
 - Use `intervals_edit_time` to fix failed or incorrect entries, then verify with `intervals_list_time` or `intervals_query_time`.
@@ -128,6 +137,7 @@ Keep the response concise.
 
 ## Common Mistakes
 
+- Starting a timer for a coding/task request without first asking whether the user wants a timer.
 - Starting a new timer while another timer is active without first asking whether the active timer should be stopped.
 - Starting a timer from only the ticket key without checking recent entries.
 - Asking the user to disambiguate before checking history and current path.
