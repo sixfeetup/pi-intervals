@@ -43,9 +43,17 @@ test("parseTimerStartAt parses ISO datetimes exactly", () => {
 test("parseTimerStartAt rejects invalid values", () => {
   const reference = new Date(2026, 4, 13, 10, 0, 0, 0);
 
+  assert.throws(() => parseTimerStartAt("", reference), /invalid start_at:/);
   assert.throws(() => parseTimerStartAt("not a time", reference), /invalid start_at: not a time/);
   assert.throws(() => parseTimerStartAt("25:00", reference), /invalid start_at: 25:00/);
   assert.throws(() => parseTimerStartAt("2026-05-13 09:99", reference), /invalid start_at: 2026-05-13 09:99/);
+});
+
+test("parseTimerStartAt rejects unsupported JavaScript date strings", () => {
+  const reference = new Date(2026, 4, 13, 10, 0, 0, 0);
+
+  assert.throws(() => parseTimerStartAt("05/13/2026 09:30", reference), /invalid start_at: 05\/13\/2026 09:30/);
+  assert.throws(() => parseTimerStartAt("May 13 2026 09:30", reference), /invalid start_at: May 13 2026 09:30/);
 });
 
 test("parseTimerStartAt rejects start times in the future", () => {

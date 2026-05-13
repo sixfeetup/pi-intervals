@@ -187,6 +187,18 @@ test("intervals_start_timer rejects invalid start_at", async () => {
   );
 });
 
+test("intervals_start_timer rejects empty start_at", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_start_timer")!;
+
+  await assert.rejects(
+    () => tool.execute("call-1", { description: "write tests", start_at: "" }, undefined, undefined, {} as any),
+    /invalid start_at:/,
+  );
+});
+
 test("intervals_stop_timer creates time entry and triggers sync", async () => {
   const { pi, tools } = fakePi();
   const { runtime, calls } = fakeRuntime();

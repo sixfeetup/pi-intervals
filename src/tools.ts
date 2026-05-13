@@ -90,7 +90,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 			}),
 			execute: async (_toolCallId, params) => {
 				const projectId = resolveProjectQuery(runtime, params.project_query) ?? params.project_id;
-				const now = params.start_at ? parseTimerStartAt(params.start_at) : undefined;
+				const now = params.start_at !== undefined ? parseTimerStartAt(params.start_at) : undefined;
 				const timer = runtime.timerService.startTimer({
 					description: params.description,
 					projectId,

@@ -30,9 +30,15 @@ export function parseTimerStartAt(input: string, referenceDate = new Date()): Da
 		return rejectFuture(parsed, referenceDate, input);
 	}
 
+	if (!isIsoDateTime(value)) throw new Error(`invalid start_at: ${input}`);
+
 	const parsed = new Date(value);
 	if (!Number.isFinite(parsed.getTime())) throw new Error(`invalid start_at: ${input}`);
 	return rejectFuture(parsed, referenceDate, input);
+}
+
+function isIsoDateTime(value: string): boolean {
+	return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?$/.test(value);
 }
 
 function buildLocalDateTime(year: number, month: number, day: number, hour: number, minute: number, original: string): Date {
