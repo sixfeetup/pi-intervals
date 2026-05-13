@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer } from "./format.js";
 import { formatEditableLocalId } from "./local-id.js";
 import type { Runtime } from "./runtime.js";
+import { parseTimerStartAt } from "./start-at.js";
 import { buildStopTimeEditSummary, formatStopTimeEditSummary } from "./time-edit-feedback.js";
 
 function resolveProjectQuery(
@@ -70,10 +71,11 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 			name: "intervals_start_timer",
 			label: "Start Intervals timer",
 			description:
-				"Start a local timer to capture work in progress. Only a description is required. Optional project, worktype, and module hints can be provided but are not required. Timers are local-only and are not synced to Intervals until stopped.",
-			promptSnippet: "intervals_start_timer — begin a local timer with just a description",
+				"Start a local timer to capture work in progress. Only a description is required. Optional project, worktype, module, and start_at hints can be provided but are not required. Timers are local-only and are not synced to Intervals until stopped.",
+			promptSnippet: "intervals_start_timer — begin a local timer with an optional local start time",
 			promptGuidelines: [
 				"Use intervals_start_timer when the user begins a new task. Only description is required.",
+				"Use start_at for user-specified local wall-clock starts such as 09:30; omit it to start at the current time.",
 				"Do not block timer start if project/worktype/module are unknown; capture them when stopping the timer.",
 				"intervals_start_timer is local-only and does not create an Intervals timer resource.",
 			],
@@ -83,16 +85,19 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 				project_query: Type.Optional(Type.String({ description: "Optional project search query to resolve a project ID" })),
 				worktype_id: Type.Optional(Type.Number({ description: "Optional worktype ID hint" })),
 				module_id: Type.Optional(Type.Number({ description: "Optional module ID hint" })),
+				start_at: Type.Optional(Type.String({ description: "Optional start time. Accepts HH:mm for today in local time, YYYY-MM-DD HH:mm for local date/time, or an ISO datetime." })),
 				notes: Type.Optional(Type.String({ description: "Optional notes for the timer" })),
 			}),
 			execute: async (_toolCallId, params) => {
 				const projectId = resolveProjectQuery(runtime, params.project_query) ?? params.project_id;
+				const now = params.start_at ? parseTimerStartAt(params.start_at) : undefined;
 				const timer = runtime.timerService.startTimer({
 					description: params.description,
 					projectId,
 					worktypeId: params.worktype_id,
 					moduleId: params.module_id,
 					notes: params.notes,
+					now,
 				});
 				return textResult(formatTimer(timer), { timer });
 			},

@@ -157,6 +157,36 @@ test("intervals_start_timer requires only description", async () => {
   assert.ok(String((result.content[0] as { type: "text"; text: string }).text).includes("t1"));
 });
 
+test("intervals_start_timer passes parsed start_at to timer service", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_start_timer")!;
+
+  await tool.execute(
+    "call-1",
+    { description: "write tests", start_at: "2000-01-01T09:30:00.000Z" },
+    undefined,
+    undefined,
+    {} as any,
+  );
+
+  const [input] = calls.startTimer[0] as [{ now?: Date }];
+  assert.equal(input.now?.toISOString(), "2000-01-01T09:30:00.000Z");
+});
+
+test("intervals_start_timer rejects invalid start_at", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_start_timer")!;
+
+  await assert.rejects(
+    () => tool.execute("call-1", { description: "write tests", start_at: "not a time" }, undefined, undefined, {} as any),
+    /invalid start_at: not a time/,
+  );
+});
+
 test("intervals_stop_timer creates time entry and triggers sync", async () => {
   const { pi, tools } = fakePi();
   const { runtime, calls } = fakeRuntime();
