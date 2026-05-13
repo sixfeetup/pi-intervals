@@ -94,7 +94,7 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | Tool                             | Description                                                                         |
 | -------------------------------- | ----------------------------------------------------------------------------------- |
 | `intervals_find_project_context` | Search the local project catalog for IDs and classifications (local-only)           |
-| `intervals_start_timer`          | Start a local timer with a simple description; project/worktype/module are optional |
+| `intervals_start_timer`          | Start a local timer with a simple description and optional `start_at`; project/worktype/module are optional |
 | `intervals_stop_timer`           | Stop a timer, resolve classification, create a pending time entry, and sync         |
 | `intervals_edit_timer`           | Update description or project/worktype/module hints on a running local timer        |
 | `intervals_delete_timer`         | Safely delete an active timer or stopped timer with no linked time entry            |
@@ -106,3 +106,5 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `intervals_list_time`            | List recent local time entries with sync status                                     |
 | `intervals_set_project_defaults` | Configure default worktype/module for a project                                     |
 | `intervals_sync_now`             | Immediately retry syncing pending time entries to Intervals                         |
+
+`intervals_start_timer` accepts optional `start_at` values for retroactive local timer starts. Use `HH:mm` or `H:mm` for today in local time, `YYYY-MM-DD HH:mm` for a local date/time, or an ISO datetime with an explicit offset/timezone. Future `start_at` values are rejected.
