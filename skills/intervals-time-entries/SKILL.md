@@ -50,6 +50,16 @@ Before starting any timer after explicit user request or confirmation:
 3. Do not start the new timer until the user answers, unless the user already explicitly said to keep existing timers running or to allow multiple active timers.
 4. If the user says to stop an active timer, stop it with the best available classification, then start the requested new timer.
 
+## Ticket-only Timer Requests
+
+When the user asks to start a timer using only a ticket key, e.g. “start a timer for FOU-406”:
+
+1. Do not use the bare ticket key as the timer description if the issue title can be found.
+2. Look for the issue title in recent time entries/timers, local project context, ticket tools, or other available issue-tracker context.
+3. Use the description format `TICKET-123: Issue title`, e.g. `FOU-406: Upgrade to Python 3.14`.
+4. Preserve exact ticket casing and title wording from the source when available.
+5. Do not invent an issue title. If the title cannot be found safely, use the ticket key plus any user-supplied work description, or ask a concise follow-up if the description would otherwise be too vague for a useful time entry.
+
 ## Classification Process
 
 ### 1. Match against recent history first
@@ -140,6 +150,7 @@ Keep the response concise.
 - Starting a timer for a coding/task request without first asking whether the user wants a timer.
 - Starting a new timer while another timer is active without first asking whether the active timer should be stopped.
 - Starting a timer from only the ticket key without checking recent entries.
+- Using a bare ticket key like `FOU-406` as the description when the issue title is available.
 - Asking the user to disambiguate before checking history and current path.
 - Forgetting to preserve the module from similar prior work.
 - Using a local catalog row ID where Intervals expects a remote worktype/module ID.
