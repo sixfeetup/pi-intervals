@@ -19,6 +19,8 @@ function fakeRuntime() {
     stopTimer: [] as unknown[],
     addTime: [] as unknown[],
     editTime: [] as unknown[],
+    deleteTime: [] as unknown[],
+    deleteTimeEntry: [] as unknown[],
     editTimer: [] as unknown[],
     deleteTimer: [] as unknown[],
     trySyncNow: 0,
@@ -62,6 +64,10 @@ function fakeRuntime() {
         calls.editTime.push(args);
         return { localId: "te1", projectId: 10, worktypeId: 5, date: "2026-04-24", durationSeconds: 1800, billable: true, syncStatus: "pending", syncAttempts: 0, createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:00:00Z" };
       },
+      deleteTime: (...args: unknown[]) => {
+        calls.deleteTime.push(args);
+        return { localId: "te1", projectId: 10, worktypeId: 5, date: "2026-04-24", durationSeconds: 1800, description: "test entry", billable: true, syncStatus: "pending", syncAttempts: 0, createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:00:00Z" };
+      },
       queryTime: () => ({
         startDate: "2026-04-24",
         endDate: "2026-04-24",
@@ -78,6 +84,10 @@ function fakeRuntime() {
       getTimeEntry: () => ({ localId: "te1", date: "2026-04-24", startAt: "07:07" }),
       findBySourceTimerId: () => undefined,
     },
+    deleteTimeEntry: async (...args: unknown[]) => {
+      calls.deleteTimeEntry.push(args);
+      return { localId: "te1", projectId: 10, worktypeId: 5, date: "2026-04-24", durationSeconds: 1800, description: "test entry", billable: true, syncStatus: "pending", syncAttempts: 0, createdAt: "2026-04-24T10:00:00Z", updatedAt: "2026-04-24T10:00:00Z" };
+    },
     trySyncNow: async () => {
       calls.trySyncNow += 1;
       return { timeEntriesCreated: 0, timeEntriesUpdated: 0, failed: 0 };
@@ -93,6 +103,7 @@ test("registers all required intervals tools", () => {
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "intervals_add_time",
+    "intervals_delete_time",
     "intervals_delete_timer",
     "intervals_edit_time",
     "intervals_edit_timer",
@@ -272,6 +283,45 @@ test("intervals_lookup_time_entry returns full legacy UUID local ids", async () 
 
   assert.equal(text.trim(), `time_entry_id: ${localId}`);
   assert.deepEqual((result as any).details, { timeEntryId: localId, timerId: "19ee097c" });
+});
+
+test("intervals_delete_time deletes a local time entry", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_delete_time")!;
+
+  const result = await tool.execute("call-1", { time_entry_id: "te1" }, undefined, undefined, {} as any);
+
+  assert.ok(String((result.content[0] as { type: "text"; text: string }).text).includes("Time entry deleted"));
+  const deleteCall = calls.deleteTimeEntry[0] as [string];
+  assert.equal(deleteCall[0], "te1");
+});
+
+test("intervals_delete_time can delete the entry linked to a timer", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  (runtime.timeEntryStore as any).findBySourceTimerId = () => ({ localId: "from-timer" });
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_delete_time")!;
+
+  await tool.execute("call-1", { timer_id: "timer1" }, undefined, undefined, {} as any);
+
+  const deleteCall = calls.deleteTimeEntry[0] as [string];
+  assert.equal(deleteCall[0], "from-timer");
+});
+
+test("intervals_delete_time rejects both time_entry_id and timer_id", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime, calls } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_delete_time")!;
+
+  await assert.rejects(
+    () => tool.execute("call-1", { time_entry_id: "te1", timer_id: "timer1" }, undefined, undefined, {} as any),
+    /cannot specify both time_entry_id and timer_id/,
+  );
+  assert.equal(calls.deleteTimeEntry.length, 0);
 });
 
 test("intervals_edit_time passes stop_time to service", async () => {

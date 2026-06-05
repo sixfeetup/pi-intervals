@@ -32,6 +32,10 @@ export class IntervalsApiClient {
     return this.request("PUT", `${resource}/${id}`, body);
   }
 
+  async deleteResource(resource: "timer" | "time", id: number): Promise<unknown> {
+    return this.request("DELETE", `${resource}/${id}`);
+  }
+
   private async request(
     method: string,
     resourcePath: string,

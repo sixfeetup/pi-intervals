@@ -48,6 +48,20 @@ test("updateResource PUTs body with json content-type", async () => {
   assert.equal((calls[0].init.headers as Record<string, string>)["Content-Type"], "application/json");
 });
 
+test("deleteResource DELETEs a resource by id", async () => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  const fetchImpl: typeof fetch = async (url, init) => {
+    calls.push({ url: String(url), init: init ?? {} });
+    return new Response(null, { status: 204 });
+  };
+  const api = new IntervalsApiClient({ apiKey: "secret", baseUrl: "https://api.example/", fetchImpl });
+
+  await api.deleteResource("time", 42);
+
+  assert.equal(calls[0].url, "https://api.example/time/42/");
+  assert.equal(calls[0].init.method, "DELETE");
+});
+
 test("extractCollection detects various wrapper keys", () => {
   assert.deepEqual(extractCollection([1, 2], "time"), [1, 2]);
   assert.deepEqual(extractCollection({ time: [{ id: 1 }] }, "time"), [{ id: 1 }]);

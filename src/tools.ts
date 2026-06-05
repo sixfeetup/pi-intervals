@@ -324,6 +324,51 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 
 	pi.registerTool(
 		defineTool({
+			name: "intervals_delete_time",
+			label: "Delete Intervals time entry",
+			description:
+				"Delete an existing local time entry. Unsynced local entries are removed locally. Synced entries are deleted from Intervals first, then removed locally. The entry can be identified by time_entry_id or by a linked source timer_id.",
+			promptSnippet: "intervals_delete_time — delete a local or synced time entry",
+			promptGuidelines: [
+				"Use intervals_delete_time when the user wants to delete a time entry rather than edit it.",
+				"If the user references a stopped timer, pass timer_id so the linked time entry can be found and deleted.",
+				"For synced entries, deletion removes the remote Intervals time entry before deleting the local row.",
+			],
+			parameters: Type.Object({
+				time_entry_id: Type.Optional(Type.String({ description: "Local ID of the time entry to delete. Optional when timer_id is provided." })),
+				timer_id: Type.Optional(Type.String({ description: "Source timer ID for the time entry to delete, mutually exclusive with time_entry_id" })),
+			}),
+			execute: async (_toolCallId, params) => {
+				if (params.time_entry_id && params.timer_id) {
+					throw new Error("cannot specify both time_entry_id and timer_id");
+				}
+				if (!params.time_entry_id && !params.timer_id) {
+					throw new Error("time_entry_id or timer_id is required");
+				}
+
+				const linkedEntry = params.timer_id ? runtime.timeEntryStore.findBySourceTimerId(params.timer_id) : undefined;
+				const localId = params.time_entry_id
+					?? (() => {
+						if (!linkedEntry) throw new Error(`no time entry linked to timer: ${params.timer_id}`);
+						return linkedEntry.localId;
+					})();
+
+				const entry = await runtime.deleteTimeEntry(localId);
+				const deleted = formatTimeEntry({
+					...entry,
+					projectName: runtime.catalogStore.getProject(entry.projectId)?.name,
+					worktypeName: runtime.catalogStore.getWorktype(entry.projectId, entry.worktypeId)?.name,
+					moduleName: entry.moduleId != null
+						? runtime.catalogStore.getModule(entry.projectId, entry.moduleId)?.name
+						: undefined,
+				});
+				return textResult(`Time entry deleted: ${formatEditableLocalId(entry.localId)}\n${deleted}`, { entry });
+			},
+		}),
+	);
+
+	pi.registerTool(
+		defineTool({
 			name: "intervals_query_time",
 			label: "Query Intervals time entries",
 			description:

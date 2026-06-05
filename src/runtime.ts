@@ -12,7 +12,7 @@ import { openDatabase, type Db } from "./db.js";
 import { IntervalsApiClient } from "./intervals-api.js";
 import { ProjectDefaultsStore } from "./project-defaults-store.js";
 import { syncPending } from "./sync-service.js";
-import { TimeEntryStore } from "./time-entry-store.js";
+import { TimeEntryStore, type TimeEntry } from "./time-entry-store.js";
 import { TimeService } from "./time-service.js";
 import { TimerService } from "./timer-service.js";
 import { TimerStore } from "./timer-store.js";
@@ -36,6 +36,7 @@ export interface Runtime {
   status(): RuntimeStatus;
   close(): void;
   trySyncNow(): Promise<{ timeEntriesCreated: number; timeEntriesUpdated: number; failed: number }>;
+  deleteTimeEntry(localId: string): Promise<TimeEntry>;
   syncProjectsCatalog(): Promise<{ clients: number; projects: number; worktypes: number; modules: number }>;
   reloadCredentials(): void;
   catalogStore: CatalogStore;
@@ -89,6 +90,18 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       limit: 50,
       catalog: catalogStore,
     });
+  }
+
+  async function deleteTimeEntry(localId: string): Promise<TimeEntry> {
+    const entry = timeEntryStore.getTimeEntry(localId);
+    if (!entry) throw new Error(`time entry not found: ${localId}`);
+    if (entry.remoteId != null) {
+      if (!apiClient) {
+        throw new Error("cannot delete synced time entry without Intervals credentials configured");
+      }
+      await apiClient.deleteResource("time", entry.remoteId);
+    }
+    return timeService.deleteTime({ localId: entry.localId });
   }
 
   async function syncProjectsCatalogNow(): Promise<{ clients: number; projects: number; worktypes: number; modules: number }> {
@@ -154,6 +167,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     status,
     close,
     trySyncNow,
+    deleteTimeEntry,
     syncProjectsCatalog: syncProjectsCatalogNow,
     reloadCredentials,
     catalogStore,

@@ -103,6 +103,44 @@ test("addTime requires worktype when no project default exists", () => {
   }
 });
 
+test("deleteTime removes a local time entry and returns the deleted entry", () => {
+  const { dir, db, catalog, service, timeEntries } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [{ id: 1, name: "Acme", active: true, raw: {} }],
+      projects: [{ id: 10, clientId: 1, name: "Website", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 100, projectId: 10, worktypeId: 5, name: "Development", active: true, raw: {} }],
+      modules: [],
+    });
+    const entry = service.addTime({
+      projectId: 10,
+      worktypeId: 5,
+      date: "2026-04-24",
+      durationSeconds: 1800,
+      description: "Delete me",
+    });
+
+    const deleted = service.deleteTime({ localId: entry.localId });
+
+    assert.equal(deleted.localId, entry.localId);
+    assert.equal(deleted.description, "Delete me");
+    assert.equal(timeEntries.getTimeEntry(entry.localId), undefined);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
+test("deleteTime rejects an unknown local time entry", () => {
+  const { dir, db, service } = setup();
+  try {
+    assert.throws(() => service.deleteTime({ localId: "missing1" }), /time entry not found: missing1/);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("addTime rounds durationSeconds to the nearest 6 minutes", () => {
   const { dir, db, catalog, defaults, service } = setup();
   try {

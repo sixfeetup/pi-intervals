@@ -35,6 +35,10 @@ export interface EditTimeInput {
   billable?: boolean;
 }
 
+export interface DeleteTimeInput {
+  localId: string;
+}
+
 export interface QueryTimeInput {
   range: TimeRange;
   start_date?: string;
@@ -173,6 +177,15 @@ export class TimeService {
     if (input.billable !== undefined) patch.billable = input.billable;
 
     return this.deps.timeEntryStore.updateTimeEntry(input.localId, patch);
+  }
+
+  deleteTime(input: DeleteTimeInput): TimeEntry {
+    const existing = this.deps.timeEntryStore.getTimeEntry(input.localId);
+    if (!existing) {
+      throw new Error(`time entry not found: ${input.localId}`);
+    }
+    this.deps.timeEntryStore.deleteTimeEntry(existing.localId);
+    return existing;
   }
 
   queryTime(input: QueryTimeInput): TimeReport {

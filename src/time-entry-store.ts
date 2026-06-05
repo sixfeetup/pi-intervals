@@ -239,6 +239,12 @@ export class TimeEntryStore {
     return updated;
   }
 
+  deleteTimeEntry(localId: string): void {
+    const resolvedLocalId = this.resolveLocalId(localId);
+    if (!resolvedLocalId) throw new Error(`time entry not found: ${localId}`);
+    this.db.prepare("delete from time_entries where local_id = ?").run(resolvedLocalId);
+  }
+
   queryTime({ startDate, endDate, projectId }: { startDate: string; endDate: string; projectId?: number }): TimeEntry[] {
     let sql = `${selectColumns} where date between ? and ?`;
     const params: unknown[] = [startDate, endDate];

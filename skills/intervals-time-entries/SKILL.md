@@ -120,6 +120,7 @@ For retroactive entries, resolve required project/worktype before creating the e
 - Use `intervals_stop_timer` when the user finishes work. Re-check recent entries if classification is missing or stale. NB: Do not modify the timer project, worktype or module if it already set.
 - Use `intervals_add_time` for retroactive entries. Convert durations to minutes.
 - Use `intervals_edit_time` to fix failed or incorrect entries, then verify with `intervals_list_time` or `intervals_query_time`.
+- Use `intervals_delete_time` when the user wants to remove a time entry. If the user references a stopped timer, pass `timer_id` so the linked time entry is deleted.
 - Use `intervals_sync_now` after adding/editing/stopping if the tool did not already sync, or when the user explicitly asks to retry sync.
 - Use `intervals_find_project_context` before relying on a project/worktype/module ID that came from text rather than a previous time entry.
 - Do not read `~/.pi/intervals/intervals.db` directly for normal workflows. Use `intervals_list_time`, `intervals_query_time`, and `intervals_lookup_time_entry`; these expose local time entry IDs, local start/end windows, sync status, and timer-to-entry mapping without direct DB access.

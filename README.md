@@ -100,6 +100,7 @@ Run `/intervals-setup` inside pi to save credentials to the local config file an
 | `intervals_delete_timer`         | Safely delete an active timer or stopped timer with no linked time entry            |
 | `intervals_add_time`             | Add a completed time entry directly (duration in minutes)                           |
 | `intervals_edit_time`            | Edit an existing local time entry by short ID or linked timer ID; use `stop_time` for local stop-time changes that recalculate duration |
+| `intervals_delete_time`          | Delete a local or synced time entry by short ID or linked timer ID                  |
 | `intervals_query_time`           | Report time entries by date range and project filter (local-only)                   |
 | `intervals_list_timers`          | List active or recent local timers                                                  |
 | `intervals_lookup_time_entry`    | Map a stopped local timer ID to the linked local time entry ID                      |
