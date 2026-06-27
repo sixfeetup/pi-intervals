@@ -16,6 +16,19 @@ test("api client fetches resource collections with json headers", async () => {
   assert.ok((calls[0].init.headers as Record<string, string>).Authorization.startsWith("Basic "));
 });
 
+test("api client includes listResource filters with pagination", async () => {
+  const calls: string[] = [];
+  const fetchImpl: typeof fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(JSON.stringify({ time: [] }), { status: 200 });
+  };
+  const api = new IntervalsApiClient({ apiKey: "secret", baseUrl: "https://api.example/", fetchImpl });
+
+  await api.listResource("time", { personid: "3", datebegin: "2026-04-24", dateend: "2026-04-24" });
+
+  assert.equal(calls[0], "https://api.example/time/?personid=3&datebegin=2026-04-24&dateend=2026-04-24&limit=100&offset=0");
+});
+
 test("sanitizeApiError removes secrets", () => {
   assert.equal(sanitizeApiError("Authorization: Basic abc secret-key", "secret-key"), "Authorization: Basic [redacted] [redacted]");
 });

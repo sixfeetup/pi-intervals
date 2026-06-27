@@ -6,12 +6,13 @@ const MAX_PAGES = 1000;
 export class IntervalsApiClient {
   constructor(private readonly options: { apiKey: string; baseUrl: string; fetchImpl?: typeof fetch }) {}
 
-  async listResource(resource: IntervalsResource): Promise<unknown[]> {
+  async listResource(resource: IntervalsResource, query: Record<string, string> = {}): Promise<unknown[]> {
     const items: unknown[] = [];
 
     for (let page = 0; page < MAX_PAGES; page++) {
       const offset = page * PAGE_SIZE;
       const data = await this.request("GET", resource, undefined, {
+        ...query,
         limit: String(PAGE_SIZE),
         offset: String(offset),
       });

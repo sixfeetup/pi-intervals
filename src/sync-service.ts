@@ -1,8 +1,9 @@
-import type { TimeEntryStore } from "./time-entry-store.js";
+import type { TimeEntry, TimeEntryStore } from "./time-entry-store.js";
 import { roundDurationSecondsForIntervals } from "./duration-rounding.js";
 import type { CatalogStore, ProjectContextResult } from "./catalog-store.js";
 
 export interface SyncApi {
+  listResource?(resource: string, query?: Record<string, string>): Promise<unknown[]>;
   createResource(resource: string, body: Record<string, unknown>): Promise<unknown>;
   updateResource(resource: string, id: number, body: Record<string, unknown>): Promise<unknown>;
 }
@@ -72,6 +73,13 @@ export async function syncPending(options: SyncPendingOptions): Promise<SyncPend
 
     try {
       if (entry.remoteId == null) {
+        const duplicateRemoteId = await findDuplicateRemoteTimeEntry(api, entry, personId, durationSeconds);
+        if (duplicateRemoteId != null) {
+          timeRepo.setRemoteTime(entry.localId, duplicateRemoteId);
+          timeEntriesUpdated++;
+          continue;
+        }
+
         const response = await api.createResource("time", payload);
         const remoteId = extractRemoteId(response);
         if (remoteId != null) {
@@ -95,6 +103,67 @@ export async function syncPending(options: SyncPendingOptions): Promise<SyncPend
   }
 
   return { timeEntriesCreated, timeEntriesUpdated, failed };
+}
+
+async function findDuplicateRemoteTimeEntry(
+  api: SyncApi,
+  entry: TimeEntry,
+  personId: number,
+  durationSeconds: number,
+): Promise<number | undefined> {
+  if (!api.listResource) return undefined;
+
+  const remoteEntries = await api.listResource("time", {
+    personid: String(personId),
+    datebegin: entry.date,
+    dateend: entry.date,
+  });
+
+  for (const remoteEntry of remoteEntries) {
+    const remoteId = extractRemoteId(remoteEntry);
+    if (remoteId != null && remoteEntryMatches(remoteEntry, entry, personId, durationSeconds)) {
+      return remoteId;
+    }
+  }
+
+  return undefined;
+}
+
+function remoteEntryMatches(remoteEntry: unknown, entry: TimeEntry, personId: number, durationSeconds: number): boolean {
+  if (!remoteEntry || typeof remoteEntry !== "object") return false;
+  const obj = remoteEntry as Record<string, unknown>;
+
+  const remotePersonId = numberField(obj, "personid", "person_id");
+  if (remotePersonId != null && remotePersonId !== personId) return false;
+
+  return numberField(obj, "projectid", "project_id") === entry.projectId
+    && numberField(obj, "worktypeid", "worktype_id") === entry.worktypeId
+    && optionalNumberField(obj, "moduleid", "module_id") === entry.moduleId
+    && stringField(obj, "date").slice(0, 10) === entry.date
+    && Math.round((numberField(obj, "time") ?? NaN) * 3600) === durationSeconds
+    && stringField(obj, "description") === (entry.description ?? "");
+}
+
+function numberField(obj: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = toNumber(obj[key]);
+    if (value != null) return value;
+  }
+  return undefined;
+}
+
+function optionalNumberField(obj: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    if (obj[key] == null || obj[key] === "") continue;
+    return toNumber(obj[key]);
+  }
+  return undefined;
+}
+
+function stringField(obj: Record<string, unknown>, key: string): string {
+  const value = obj[key];
+  if (value == null) return "";
+  return String(value);
 }
 
 function validateClassification(

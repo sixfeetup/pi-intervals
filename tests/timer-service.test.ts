@@ -265,6 +265,25 @@ test("stopTimer by localId creates pending time entry and stops timer", () => {
   }
 });
 
+test("stopTimer records an overnight timer against its start date", () => {
+  const { dir, db, service } = setup();
+  try {
+    const timer = service.startTimer({ description: "Overnight", now: new Date(2026, 3, 24, 23, 30, 0) });
+
+    const entry = service.stopTimer({
+      localId: timer.localId,
+      projectId: 10,
+      worktypeId: 5,
+      now: new Date(2026, 3, 25, 15, 0, 0),
+    });
+
+    assert.equal(entry.date, "2026-04-24");
+    assert.equal(entry.durationSeconds, 55800);
+  } finally {
+    teardown(dir, db);
+  }
+});
+
 test("stopTimer requires project", () => {
   const { dir, db, service } = setup();
   try {

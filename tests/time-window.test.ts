@@ -73,28 +73,33 @@ test("calculateDurationForLocalStopTime uses local start date when stored date i
   }
 });
 
-test("calculateDurationForLocalStopTime rejects stop times before local start time", () => {
-  assert.throws(
-    () => calculateDurationForLocalStopTime({
-      date: "2026-05-05",
-      startAt: localIso(2026, 4, 5, 7, 7, 43, 897),
-      stopTime: "06:35",
-    }),
-    /before start time/,
+test("calculateDurationForLocalStopTime treats stop times before local start as next day", () => {
+  const startAt = localIso(2026, 4, 5, 7, 7, 43, 897);
+  const result = calculateDurationForLocalStopTime({
+    date: "2026-05-05",
+    startAt,
+    stopTime: "06:35",
+  });
+  const expectedRawDurationSeconds = Math.floor(
+    (new Date(2026, 4, 6, 6, 35, 0, 0).getTime() - new Date(startAt).getTime()) / 1000,
   );
+
+  assert.equal(result.endAt, "06:35");
+  assert.equal(result.rawDurationSeconds, expectedRawDurationSeconds);
+  assert.equal(result.durationSeconds, Math.round(expectedRawDurationSeconds / 10) * 10);
 });
 
-test("calculateDurationForLocalStopTime rejects stop times a few seconds before local start time", () => {
+test("calculateDurationForLocalStopTime treats stop times a few seconds before local start as next day", () => {
   const startAt = new Date(2026, 4, 5, 8, 35, 4, 0).toISOString();
 
-  assert.throws(
-    () => calculateDurationForLocalStopTime({
-      date: "2026-05-05",
-      startAt,
-      stopTime: "08:35",
-    }),
-    /before start time/,
-  );
+  const result = calculateDurationForLocalStopTime({
+    date: "2026-05-05",
+    startAt,
+    stopTime: "08:35",
+  });
+
+  assert.equal(result.rawDurationSeconds, 24 * 60 * 60 - 4);
+  assert.equal(result.durationSeconds, 24 * 60 * 60);
 });
 
 test("calculateDurationForLocalStopTime rejects invalid dates", () => {

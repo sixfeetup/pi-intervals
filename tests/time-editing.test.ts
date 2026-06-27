@@ -130,6 +130,39 @@ test("editTime stopTime accepts bare local startAt overrides", () => {
   }
 });
 
+test("editTime stopTime treats earlier stop times as next-day stops", () => {
+  const { dir, db, catalog, timeEntries, service } = setup();
+  try {
+    catalog.replaceCatalog({
+      clients: [],
+      projects: [{ id: 67184, name: "SFUP001 - System Administration", active: true, billable: true, raw: {} }],
+      worktypes: [{ id: 1, projectId: 67184, worktypeId: 118848, name: "Development", active: true, raw: {} }],
+      modules: [],
+    });
+    timeEntries.insertTimeEntry({
+      localId: "overnite",
+      projectId: 67184,
+      worktypeId: 118848,
+      date: "2026-05-05",
+      startAt: "23:30",
+      durationSeconds: 0,
+      billable: true,
+      syncStatus: "synced",
+      createdAt: "2026-05-05T23:30:00.000Z",
+      updatedAt: "2026-05-05T23:30:00.000Z",
+    });
+
+    const edited = service.editTime({ localId: "overnite", stopTime: "00:30" });
+
+    assert.equal(edited.date, "2026-05-05");
+    assert.equal(edited.endAt, "00:30");
+    assert.equal(edited.durationSeconds, 3600);
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("editTime rejects stopTime with explicit durationSeconds", () => {
   const { dir, db, catalog, timeEntries, service } = setup();
   try {

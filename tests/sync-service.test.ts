@@ -89,6 +89,66 @@ test("syncPending creates unsynced pending time entries", async () => {
   }
 });
 
+test("syncPending links an exact same-day remote time entry instead of creating a duplicate", async () => {
+  const { dir, db, timeRepo } = setup();
+  try {
+    timeRepo.insertTimeEntry({
+      localId: "entry-dupe",
+      projectId: 10,
+      worktypeId: 5,
+      moduleId: 7,
+      date: "2026-04-24",
+      durationSeconds: 3600,
+      description: "Dev work",
+      billable: true,
+      syncStatus: "pending",
+      createdAt: "2026-04-24T10:00:00Z",
+      updatedAt: "2026-04-24T10:00:00Z",
+    });
+
+    const listCalls: Array<{ resource: string; query: Record<string, string> }> = [];
+    let createCalls = 0;
+    const api = {
+      listResource: async (resource: string, query: Record<string, string>) => {
+        listCalls.push({ resource, query });
+        return [{
+          id: 321,
+          personid: 3,
+          projectid: 10,
+          worktypeid: 5,
+          moduleid: 7,
+          date: "2026-04-24",
+          time: 1,
+          description: "Dev work",
+        }];
+      },
+      createResource: async () => {
+        createCalls++;
+        return { id: 999 };
+      },
+      updateResource: async () => ({}),
+    };
+
+    const result = await syncPending({ timeRepo, api, personId: 3, limit: 10 });
+
+    assert.deepEqual(listCalls, [{
+      resource: "time",
+      query: { personid: "3", datebegin: "2026-04-24", dateend: "2026-04-24" },
+    }]);
+    assert.equal(createCalls, 0);
+    assert.equal(result.timeEntriesCreated, 0);
+    assert.equal(result.timeEntriesUpdated, 1);
+    assert.equal(result.failed, 0);
+
+    const updated = timeRepo.getTimeEntry("entry-dupe")!;
+    assert.equal(updated.remoteId, 321);
+    assert.equal(updated.syncStatus, "synced");
+  } finally {
+    db.close();
+    teardown(dir);
+  }
+});
+
 test("syncPending sends unbillable pending entries as billable=f", async () => {
   const { dir, db, timeRepo } = setup();
   try {
