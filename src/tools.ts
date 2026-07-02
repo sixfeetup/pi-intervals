@@ -3,6 +3,7 @@ import { defineTool, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer, formatTimerRows } from "./format.js";
 import { formatEditableLocalId } from "./local-id.js";
+import { quietToolRenderer } from "./quiet-tool-rendering.js";
 import type { Runtime } from "./runtime.js";
 import { parseTimerStartAt } from "./start-at.js";
 import { buildStopTimeEditSummary, formatStopTimeEditSummary } from "./time-edit-feedback.js";
@@ -40,6 +41,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_find_project_context",
+			...quietToolRenderer("intervals_find_project_context"),
 			label: "Find Intervals project context",
 			description:
 				"Search local Intervals project catalog for projects, worktypes, and modules. Returns matching projects with their classifications. This is local-only and does not call the Intervals API.",
@@ -76,6 +78,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_start_timer",
+			...quietToolRenderer("intervals_start_timer"),
 			label: "Start Intervals timer",
 			description:
 				"Start a local timer to capture work in progress. Only a description is required. Optional project, worktype, module, and start_at hints can be provided but are not required. Timers are local-only and are not synced to Intervals until stopped.",
@@ -114,6 +117,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_stop_timer",
+			...quietToolRenderer("intervals_stop_timer"),
 			label: "Stop Intervals timer",
 			description:
 				"Stop a local timer and convert it into a pending time entry. You must provide or resolve the project and worktype. The resulting time entry is then synced to Intervals.",
@@ -157,6 +161,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_edit_timer",
+			...quietToolRenderer("intervals_edit_timer"),
 			label: "Edit Intervals timer",
 			description:
 				"Update a running local timer's project, worktype, or module hints. This is local-only and affects the time entry created when the timer is stopped.",
@@ -190,6 +195,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_delete_timer",
+			...quietToolRenderer("intervals_delete_timer"),
 			label: "Delete Intervals timer",
 			description:
 				"Delete a local timer safely. Active timers can be discarded. Stopped timers can only be deleted when they do not have a linked time entry.",
@@ -212,6 +218,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_add_time",
+			...quietToolRenderer("intervals_add_time"),
 			label: "Add Intervals time entry",
 			description:
 				"Add a time entry directly without using a timer. Duration is given in minutes and converted to seconds locally. The entry is created as pending and will sync on the next sync pass.",
@@ -258,6 +265,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_edit_time",
+			...quietToolRenderer("intervals_edit_time"),
 			label: "Edit Intervals time entry",
 			description:
 				"Edit an existing local time entry. If duration_minutes is provided, it is converted to seconds. The entry is marked pending and time-entry sync is triggered. If the entry was previously synced, it will be updated via PUT on the next sync.",
@@ -332,6 +340,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_delete_time",
+			...quietToolRenderer("intervals_delete_time"),
 			label: "Delete Intervals time entry",
 			description:
 				"Delete an existing local time entry. Unsynced local entries are removed locally. Synced entries are deleted from Intervals first, then removed locally. The entry can be identified by time_entry_id or by a linked source timer_id.",
@@ -377,6 +386,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_query_time",
+			...quietToolRenderer("intervals_query_time"),
 			label: "Query Intervals time entries",
 			description:
 				"Query local time entries by date range and optional project filter. This is local-only and does not call the Intervals API. Use it for reporting and summaries.",
@@ -411,6 +421,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_list_timers",
+			...quietToolRenderer("intervals_list_timers"),
 			label: "List Intervals timers",
 			description: "List active or recent local timers. Useful for showing the user what timers are running or were recently stopped.",
 			promptSnippet: "intervals_list_timers — show active or recent local timers",
@@ -438,6 +449,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_lookup_time_entry",
+			...quietToolRenderer("intervals_lookup_time_entry"),
 			label: "Lookup Intervals time entry",
 			description: "Find the local time entry ID linked to a stopped local timer. Agent-facing lookup to avoid SQLite inspection.",
 			promptSnippet: "intervals_lookup_time_entry — map a stopped timer ID to its linked time entry ID",
@@ -463,6 +475,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_list_time",
+			...quietToolRenderer("intervals_list_time"),
 			label: "List recent Intervals time entries",
 			description: "List recent local time entries, including their sync status. Useful for reviewing recently logged time.",
 			promptSnippet: "intervals_list_time — list recent local time entries",
@@ -491,6 +504,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_set_project_defaults",
+			...quietToolRenderer("intervals_set_project_defaults"),
 			label: "Set Intervals project defaults",
 			description:
 				"Set the default worktype and optional module for a project. These defaults are used when starting timers or adding time entries without explicit worktype/module IDs.",
@@ -521,6 +535,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 	pi.registerTool(
 		defineTool({
 			name: "intervals_sync_now",
+			...quietToolRenderer("intervals_sync_now"),
 			label: "Sync Intervals time entries now",
 			description:
 				"Immediately attempt to sync pending local time entries to Intervals. Returns counts of created, updated, and failed entries.",

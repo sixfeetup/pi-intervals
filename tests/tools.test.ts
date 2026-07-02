@@ -13,6 +13,21 @@ function fakePi(): { pi: ExtensionAPI; tools: ToolDefinition[] } {
   return { pi, tools };
 }
 
+const fakeTheme = {
+  fg: (_color: string, text: string) => text,
+  bold: (text: string) => text,
+} as any;
+
+function renderToolResultText(tool: ToolDefinition, result: unknown): string {
+  assert.ok(tool.renderResult, `${tool.name} should have renderResult`);
+  return tool.renderResult(result as any, { expanded: true, isPartial: false }, fakeTheme, {} as any).render(120).join("\n");
+}
+
+function renderToolCallText(tool: ToolDefinition, args: unknown = {}): string {
+  assert.ok(tool.renderCall, `${tool.name} should have renderCall`);
+  return tool.renderCall(args as any, fakeTheme, {} as any).render(120).join("\n");
+}
+
 function fakeRuntime() {
   const calls = {
     startTimer: [] as unknown[],
@@ -119,7 +134,7 @@ test("registers all required intervals tools", () => {
   ]);
 });
 
-test("each tool has a promptSnippet and promptGuidelines", () => {
+test("each tool has a promptSnippet, promptGuidelines, and quiet renderers", () => {
   const { pi, tools } = fakePi();
   const { runtime } = fakeRuntime();
   registerIntervalsTools(runtime, pi);
@@ -127,7 +142,44 @@ test("each tool has a promptSnippet and promptGuidelines", () => {
     assert.ok(tool.promptSnippet, `${tool.name} should have promptSnippet`);
     assert.ok(Array.isArray(tool.promptGuidelines), `${tool.name} should have promptGuidelines array`);
     assert.ok(tool.promptGuidelines.length > 0, `${tool.name} should have at least one guideline`);
+    assert.ok(tool.renderCall, `${tool.name} should have quiet renderCall`);
+    assert.ok(tool.renderResult, `${tool.name} should have quiet renderResult`);
   }
+});
+
+test("intervals tools render quiet summaries instead of raw result text", () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_list_time")!;
+
+  assert.equal(renderToolCallText(tool), "intervals_list_time");
+  const rendered = renderToolResultText(tool, {
+    content: [{ type: "text", text: "FOU-448: Implement database secrets rotation\nAI Guild L10" }],
+    details: { entries: [{}, {}] },
+  });
+
+  assert.equal(rendered, "✓ intervals_list_time · 2 entries");
+  assert.ok(!rendered.includes("FOU-448"), rendered);
+  assert.ok(!rendered.includes("AI Guild"), rendered);
+});
+
+test("intervals_stop_timer quiet renderer summarizes sync status", () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_stop_timer")!;
+
+  const rendered = renderToolResultText(tool, {
+    content: [{ type: "text", text: "Timer stopped → 5132d87a\nraw verbose text" }],
+    details: {
+      entry: { localId: "5132d87a", durationSeconds: 1800 },
+      sync: { timeEntriesCreated: 1, timeEntriesUpdated: 0, failed: 0 },
+    },
+  });
+
+  assert.equal(rendered, "✓ intervals_stop_timer · stopped 30m · synced");
+  assert.ok(!rendered.includes("raw verbose"), rendered);
 });
 
 test("intervals_find_project_context returns global Intervals worktype and module IDs", async () => {
