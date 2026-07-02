@@ -256,6 +256,29 @@ test("intervals_delete_timer deletes a timer", async () => {
   assert.deepEqual(deleteCall[0], { localId: "t1" });
 });
 
+test("intervals_list_timers recent uses linked time entry duration for stopped timers", async () => {
+  const { pi, tools } = fakePi();
+  const { runtime } = fakeRuntime();
+  (runtime.timerStore as any).listRecent = () => [{
+    localId: "t1",
+    description: "test timer",
+    elapsedSeconds: 29040,
+    state: "stopped",
+    startedAt: "2026-07-01T09:28:00.000Z",
+    createdAt: "2026-07-01T09:28:00.000Z",
+    updatedAt: "2026-07-01T17:32:00.000Z",
+  }];
+  (runtime.timeEntryStore as any).findBySourceTimerId = () => ({ durationSeconds: 25200 });
+  registerIntervalsTools(runtime, pi);
+  const tool = tools.find((t) => t.name === "intervals_list_timers")!;
+
+  const result = await tool.execute("call-1", { state: "recent" }, undefined, undefined, {} as any);
+  const text = String((result.content[0] as { type: "text"; text: string }).text);
+
+  assert.ok(text.includes("7h"), `expected linked entry duration, got: ${text}`);
+  assert.ok(!text.includes("8h 4m"), `should not show stale timer duration: ${text}`);
+});
+
 test("intervals_lookup_time_entry returns the time entry id for a source timer", async () => {
   const { pi, tools } = fakePi();
   const { runtime } = fakeRuntime();

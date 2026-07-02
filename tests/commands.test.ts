@@ -89,6 +89,7 @@ function fakeRuntime(options: { credentialsConfigured?: boolean; personId?: numb
       listRecent: () => [{ localId: "te1", durationSeconds: 3600 }],
       getTimeEntry: () => ({ localId: "te1", date: "2026-05-05", startAt: "07:07", durationSeconds: 3600, syncStatus: "pending" }),
       updateTimeEntry: () => ({ localId: "te1", durationSeconds: 3600, syncStatus: "pending" }),
+      findBySourceTimerId: () => undefined,
     },
     timeService: {
       queryTime: () => {
@@ -210,6 +211,30 @@ test("intervals-timers shows bright compact active timer rows", async () => {
   assert.ok(notify.message.includes("\u001b[93m2m\u001b[0m"), "should brighten elapsed time");
   assert.ok(notify.message.includes("\u001b[96mt1\u001b[0m"), "should brighten timer id");
   assert.ok(notify.message.includes("test timer"), "should show timer description");
+});
+
+test("intervals-timers recent uses linked time entry duration for stopped timers", async () => {
+  const { pi, commands } = fakePi();
+  const { runtime } = fakeRuntime();
+  (runtime.timerStore as any).listRecent = () => [{
+    localId: "t1",
+    description: "test timer",
+    elapsedSeconds: 29040,
+    state: "stopped",
+    startedAt: "2026-07-01T09:28:00.000Z",
+    createdAt: "2026-07-01T09:28:00.000Z",
+    updatedAt: "2026-07-01T17:32:00.000Z",
+  }];
+  (runtime.timeEntryStore as any).findBySourceTimerId = () => ({ durationSeconds: 25200 });
+  registerIntervalsCommands(runtime, pi);
+  const cmd = commands.find((c) => c.name === "intervals-timers")!;
+  const ctx = fakeCtx();
+
+  await cmd.handler("recent", ctx);
+  const notify = ctx.notifications[0];
+
+  assert.ok(notify.message.includes("\u001b[93m7h\u001b[0m"), `expected linked entry duration, got: ${notify.message}`);
+  assert.ok(!notify.message.includes("8h 4m"), `should not show stale timer duration: ${notify.message}`);
 });
 
 test("intervals-timers edit updates a running timer", async () => {

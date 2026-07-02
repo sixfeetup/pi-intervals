@@ -1,11 +1,12 @@
 import { StringEnum } from "@mariozechner/pi-ai";
 import { defineTool, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
-import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer } from "./format.js";
+import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer, formatTimerRows } from "./format.js";
 import { formatEditableLocalId } from "./local-id.js";
 import type { Runtime } from "./runtime.js";
 import { parseTimerStartAt } from "./start-at.js";
 import { buildStopTimeEditSummary, formatStopTimeEditSummary } from "./time-edit-feedback.js";
+import type { Timer } from "./timer-store.js";
 
 function resolveProjectQuery(
 	runtime: Runtime,
@@ -27,6 +28,12 @@ function textResult(text: string, details?: unknown) {
 		content: [{ type: "text" as const, text }],
 		details: details ?? {},
 	};
+}
+
+function withLinkedTimeEntryDuration(runtime: Runtime, timer: Timer): Timer & { displayElapsedSeconds?: number; displayStartAt?: string; displayEndAt?: string } {
+	if (timer.state !== "stopped") return timer;
+	const entry = runtime.timeEntryStore.findBySourceTimerId(timer.localId);
+	return entry ? { ...timer, displayElapsedSeconds: entry.durationSeconds, displayStartAt: entry.startAt, displayEndAt: entry.endAt } : timer;
 }
 
 export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void {
@@ -422,7 +429,7 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					params.state === "recent"
 						? runtime.timerStore.listRecent(params.limit ?? 20)
 						: runtime.timerStore.listActive();
-				const lines = timers.map((t) => formatTimer(t));
+				const lines = formatTimerRows(timers.map((t) => withLinkedTimeEntryDuration(runtime, t)));
 				return textResult(lines.join("\n") || "No timers found.", { timers });
 			},
 		}),

@@ -3,7 +3,7 @@ import type { TimeEntry } from "./time-entry-store.js";
 import type { TimeReport } from "./time-service.js";
 import type { SyncPendingResult } from "./sync-service.js";
 import { formatEditableLocalId } from "./local-id.js";
-import { formatTimeEntryWindow } from "./time-window.js";
+import { formatLocalTimeOfDay, formatTimeEntryWindow } from "./time-window.js";
 
 export function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -14,10 +14,27 @@ export function formatDuration(totalSeconds: number): string {
   return parts.join(" ");
 }
 
-export function formatTimer(timer: Timer, now = new Date()): string {
-  const id = timer.localId.slice(0, 8);
-  const dur = formatDuration(getTimerElapsedSeconds(timer, now));
-  return `${id} ${timer.state} ${dur} ${timer.description}`;
+type DisplayTimer = Timer & {
+  displayElapsedSeconds?: number;
+  displayStartAt?: string;
+  displayEndAt?: string;
+};
+
+interface TimerRowParts {
+  id: string;
+  state: Timer["state"];
+  status: string;
+  window: string;
+  duration: string;
+  description: string;
+}
+
+export function formatTimer(timer: DisplayTimer, now = new Date()): string {
+  return formatTimerRows([timer], now)[0] ?? "";
+}
+
+export function formatTimerRows(timers: DisplayTimer[], now = new Date()): string[] {
+  return formatTimerRowsInternal(timers, now, false);
 }
 
 const ANSI_RESET = "\u001b[0m";
@@ -27,14 +44,58 @@ const ANSI_BRIGHT_CYAN = "\u001b[96m";
 const ANSI_BRIGHT_RED = "\u001b[91m";
 const ANSI_DIM = "\u001b[2m";
 
-export function formatBrightTimer(timer: Timer, now = new Date()): string {
-  const id = timer.localId.slice(0, 8);
-  const dur = formatDuration(getTimerElapsedSeconds(timer, now));
-  const statusColor = timer.state === "active" ? ANSI_BRIGHT_GREEN : ANSI_DIM;
-  return `${statusColor}● ${timer.state}${ANSI_RESET}  ${ANSI_BRIGHT_YELLOW}${dur}${ANSI_RESET}  ${ANSI_BRIGHT_CYAN}${id}${ANSI_RESET}  ${timer.description}`;
+export function formatBrightTimer(timer: DisplayTimer, now = new Date()): string {
+  return formatBrightTimerRows([timer], now)[0] ?? "";
 }
 
-function getTimerElapsedSeconds(timer: Timer, now: Date): number {
+export function formatBrightTimerRows(timers: DisplayTimer[], now = new Date()): string[] {
+  return formatTimerRowsInternal(timers, now, true);
+}
+
+function formatTimerRowsInternal(timers: DisplayTimer[], now: Date, bright: boolean): string[] {
+  const parts = timers.map((timer) => getTimerRowParts(timer, now));
+  const statusWidth = Math.max("● stopped".length, ...parts.map((p) => p.status.length));
+  const windowWidth = Math.max("00:00-00:00".length, ...parts.map((p) => p.window.length));
+  const durationWidth = Math.max(0, ...parts.map((p) => p.duration.length));
+  return parts.map((part) => formatTimerRow(part, { statusWidth, windowWidth, durationWidth }, bright));
+}
+
+function getTimerRowParts(timer: DisplayTimer, now: Date): TimerRowParts {
+  return {
+    id: timer.localId.slice(0, 8),
+    state: timer.state,
+    status: `● ${timer.state}`,
+    window: getTimerWindow(timer, now),
+    duration: formatDuration(getTimerElapsedSeconds(timer, now)),
+    description: timer.description,
+  };
+}
+
+function formatTimerRow(
+  part: TimerRowParts,
+  widths: { statusWidth: number; windowWidth: number; durationWidth: number },
+  bright: boolean,
+): string {
+  const statusPadding = " ".repeat(widths.statusWidth - part.status.length);
+  const durationPadding = " ".repeat(widths.durationWidth - part.duration.length);
+  const statusColor = part.state === "active" ? ANSI_BRIGHT_GREEN : ANSI_DIM;
+  const status = bright ? `${statusColor}${part.status}${ANSI_RESET}${statusPadding}` : part.status.padEnd(widths.statusWidth);
+  const duration = bright ? `${durationPadding}${ANSI_BRIGHT_YELLOW}${part.duration}${ANSI_RESET}` : part.duration.padStart(widths.durationWidth);
+  const id = bright ? `${ANSI_BRIGHT_CYAN}${part.id}${ANSI_RESET}` : part.id;
+  return `${status} ${part.window.padEnd(widths.windowWidth)}  ${duration}  ${id}  ${part.description}`;
+}
+
+function getTimerWindow(timer: DisplayTimer, now: Date): string {
+  const startAt = timer.displayStartAt ?? timer.startedAt;
+  const endAt = timer.state === "active"
+    ? timer.displayEndAt ?? now.toISOString()
+    : timer.displayEndAt ?? timer.stoppedAt;
+  if (!startAt || !endAt) return "";
+  return `${formatLocalTimeOfDay(startAt)}-${formatLocalTimeOfDay(endAt)}`;
+}
+
+function getTimerElapsedSeconds(timer: DisplayTimer, now: Date): number {
+  if (timer.state === "stopped" && timer.displayElapsedSeconds !== undefined) return timer.displayElapsedSeconds;
   if (timer.state !== "active") return timer.elapsedSeconds;
 
   const startedAt = new Date(timer.startedAt).getTime();

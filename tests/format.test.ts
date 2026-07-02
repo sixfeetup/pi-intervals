@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  formatBrightTimerRows,
   formatDuration,
   formatTimer,
+  formatTimerRows,
   formatTimeEntry,
   formatTimeReport,
   formatSyncSummary,
@@ -26,31 +28,99 @@ test("formatDuration renders hours and minutes compactly", () => {
   assert.equal(formatDuration(150), "2m");
 });
 
-test("formatTimer renders active timer using current elapsed time", () => {
+test("formatTimer renders active timer with time window", () => {
+  const startedAt = new Date(2026, 3, 24, 10, 0).toISOString();
   const timer: Timer = {
     localId: "abc12345-0000-0000-0000-000000000000",
     description: "Design review",
-    startedAt: "2026-04-24T10:00:00Z",
+    startedAt,
     elapsedSeconds: 0,
     state: "active",
-    createdAt: "2026-04-24T10:00:00Z",
-    updatedAt: "2026-04-24T10:00:00Z",
+    createdAt: startedAt,
+    updatedAt: startedAt,
   };
-  assert.equal(formatTimer(timer, new Date("2026-04-24T11:01:00Z")), "abc12345 active 1h 1m Design review");
+  assert.equal(formatTimer(timer, new Date(2026, 3, 24, 11, 1)), "● active  10:00-11:01  1h 1m  abc12345  Design review");
 });
 
-test("formatTimer renders stopped timer compactly", () => {
+test("formatTimer renders stopped timer with time window", () => {
   const timer: Timer = {
     localId: "def67890-0000-0000-0000-000000000000",
     description: "Bug fix",
-    startedAt: "2026-04-24T09:00:00Z",
-    stoppedAt: "2026-04-24T09:30:00Z",
+    startedAt: new Date(2026, 3, 24, 9, 0).toISOString(),
+    stoppedAt: new Date(2026, 3, 24, 9, 30).toISOString(),
     elapsedSeconds: 1800,
     state: "stopped",
-    createdAt: "2026-04-24T09:00:00Z",
-    updatedAt: "2026-04-24T09:30:00Z",
+    createdAt: new Date(2026, 3, 24, 9, 0).toISOString(),
+    updatedAt: new Date(2026, 3, 24, 9, 30).toISOString(),
   };
-  assert.equal(formatTimer(timer), "def67890 stopped 30m Bug fix");
+  assert.equal(formatTimer(timer), "● stopped 09:00-09:30  30m  def67890  Bug fix");
+});
+
+test("formatTimerRows aligns status, window, duration, and id columns", () => {
+  const timers: Array<Timer & { displayElapsedSeconds?: number; displayStartAt?: string; displayEndAt?: string }> = [
+    {
+      localId: "f52d5ed6",
+      description: "Sixie standup",
+      startedAt: new Date(2026, 6, 1, 9, 0).toISOString(),
+      elapsedSeconds: 0,
+      state: "active",
+      createdAt: new Date(2026, 6, 1, 9, 0).toISOString(),
+      updatedAt: new Date(2026, 6, 1, 9, 0).toISOString(),
+    },
+    {
+      localId: "813963d3",
+      description: "FOU-448: Implement database secrets rotation",
+      startedAt: new Date(2026, 6, 1, 9, 29).toISOString(),
+      stoppedAt: new Date(2026, 6, 1, 17, 33).toISOString(),
+      elapsedSeconds: 29040,
+      displayElapsedSeconds: 25200,
+      displayStartAt: "09:29",
+      displayEndAt: "16:30",
+      state: "stopped",
+      createdAt: new Date(2026, 6, 1, 9, 29).toISOString(),
+      updatedAt: new Date(2026, 6, 1, 17, 33).toISOString(),
+    },
+  ];
+
+  const rows = formatTimerRows(timers, new Date(2026, 6, 1, 9, 29));
+
+  assert.deepEqual(rows, [
+    "● active  09:00-09:29  29m  f52d5ed6  Sixie standup",
+    "● stopped 09:29-16:30   7h  813963d3  FOU-448: Implement database secrets rotation",
+  ]);
+  assert.equal(rows[0].indexOf("09:00"), rows[1].indexOf("09:29"));
+  assert.equal(rows[0].indexOf("f52d5ed6"), rows[1].indexOf("813963d3"));
+});
+
+test("formatBrightTimerRows keeps visible timer columns aligned", () => {
+  const activeStart = new Date(2026, 6, 1, 9, 0).toISOString();
+  const rows = formatBrightTimerRows([
+    {
+      localId: "f52d5ed6",
+      description: "Sixie standup",
+      startedAt: activeStart,
+      elapsedSeconds: 0,
+      state: "active",
+      createdAt: activeStart,
+      updatedAt: activeStart,
+    },
+    {
+      localId: "813963d3",
+      description: "FOU-448: Implement database secrets rotation",
+      startedAt: new Date(2026, 6, 1, 9, 29).toISOString(),
+      stoppedAt: new Date(2026, 6, 1, 17, 33).toISOString(),
+      elapsedSeconds: 29040,
+      displayElapsedSeconds: 25200,
+      displayStartAt: "09:29",
+      displayEndAt: "16:30",
+      state: "stopped",
+      createdAt: new Date(2026, 6, 1, 9, 29).toISOString(),
+      updatedAt: new Date(2026, 6, 1, 17, 33).toISOString(),
+    },
+  ], new Date(2026, 6, 1, 9, 29)).map(stripAnsi);
+
+  assert.equal(rows[0].indexOf("09:00"), rows[1].indexOf("09:29"));
+  assert.equal(rows[0].indexOf("f52d5ed6"), rows[1].indexOf("813963d3"));
 });
 
 test("formatTimeEntry renders compactly with sync status", () => {
