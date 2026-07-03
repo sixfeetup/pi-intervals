@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   formatBrightTimerRows,
+  formatBrightTimerRowsByDate,
   formatDuration,
   formatTimer,
   formatTimerRows,
@@ -121,6 +122,62 @@ test("formatBrightTimerRows keeps visible timer columns aligned", () => {
 
   assert.equal(rows[0].indexOf("09:00"), rows[1].indexOf("09:29"));
   assert.equal(rows[0].indexOf("f52d5ed6"), rows[1].indexOf("813963d3"));
+});
+
+test("formatBrightTimerRowsByDate groups timers under dated totals", () => {
+  const rows = formatBrightTimerRowsByDate([
+    {
+      localId: "f3548369",
+      description: "Meet with Jason Weaver",
+      startedAt: new Date(2026, 6, 3, 18, 4).toISOString(),
+      stoppedAt: new Date(2026, 6, 3, 19, 50).toISOString(),
+      elapsedSeconds: 6480,
+      displayElapsedSeconds: 6480,
+      displayDate: "2026-07-03",
+      displayStartAt: "18:04",
+      displayEndAt: "19:50",
+      state: "stopped",
+      createdAt: new Date(2026, 6, 3, 18, 4).toISOString(),
+      updatedAt: new Date(2026, 6, 3, 19, 50).toISOString(),
+    },
+    {
+      localId: "b3f0083d",
+      description: "FOU-448",
+      startedAt: new Date(2026, 6, 3, 10, 18).toISOString(),
+      stoppedAt: new Date(2026, 6, 3, 16, 4).toISOString(),
+      elapsedSeconds: 20880,
+      displayElapsedSeconds: 20880,
+      displayDate: "2026-07-03",
+      displayStartAt: "10:18",
+      displayEndAt: "16:04",
+      state: "stopped",
+      createdAt: new Date(2026, 6, 3, 10, 18).toISOString(),
+      updatedAt: new Date(2026, 6, 3, 16, 4).toISOString(),
+    },
+    {
+      localId: "813963d3",
+      description: "FOU-448",
+      startedAt: new Date(2026, 6, 2, 9, 28).toISOString(),
+      stoppedAt: new Date(2026, 6, 2, 16, 30).toISOString(),
+      elapsedSeconds: 25200,
+      displayElapsedSeconds: 25200,
+      displayDate: "2026-07-02",
+      displayStartAt: "09:28",
+      displayEndAt: "16:30",
+      state: "stopped",
+      createdAt: new Date(2026, 6, 2, 9, 28).toISOString(),
+      updatedAt: new Date(2026, 6, 2, 16, 30).toISOString(),
+    },
+  ]).map(stripAnsi);
+
+  assert.deepEqual(rows, [
+    "Fri 2026-07-03 · 7h 36m",
+    "● stopped 18:04-19:50  1h 48m  f3548369  Meet with Jason Weaver",
+    "● stopped 10:18-16:04  5h 48m  b3f0083d  FOU-448",
+    "",
+    "Thu 2026-07-02 · 7h",
+    "● stopped 09:28-16:30      7h  813963d3  FOU-448",
+  ]);
 });
 
 test("formatTimeEntry renders compactly with sync status", () => {

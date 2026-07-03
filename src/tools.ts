@@ -1,7 +1,7 @@
 import { StringEnum } from "@mariozechner/pi-ai";
 import { defineTool, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
-import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer, formatTimerRows } from "./format.js";
+import { formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport, formatTimer, formatTimerRows, formatTimerRowsByDate } from "./format.js";
 import { formatEditableLocalId } from "./local-id.js";
 import { quietToolRenderer } from "./quiet-tool-rendering.js";
 import type { Runtime } from "./runtime.js";
@@ -31,10 +31,10 @@ function textResult(text: string, details?: unknown) {
 	};
 }
 
-function withLinkedTimeEntryDuration(runtime: Runtime, timer: Timer): Timer & { displayElapsedSeconds?: number; displayStartAt?: string; displayEndAt?: string } {
+function withLinkedTimeEntryDuration(runtime: Runtime, timer: Timer): Timer & { displayElapsedSeconds?: number; displayDate?: string; displayStartAt?: string; displayEndAt?: string } {
 	if (timer.state !== "stopped") return timer;
 	const entry = runtime.timeEntryStore.findBySourceTimerId(timer.localId);
-	return entry ? { ...timer, displayElapsedSeconds: entry.durationSeconds, displayStartAt: entry.startAt, displayEndAt: entry.endAt } : timer;
+	return entry ? { ...timer, displayElapsedSeconds: entry.durationSeconds, displayDate: entry.date, displayStartAt: entry.startAt, displayEndAt: entry.endAt } : timer;
 }
 
 export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void {
@@ -440,7 +440,8 @@ export function registerIntervalsTools(runtime: Runtime, pi: ExtensionAPI): void
 					params.state === "recent"
 						? runtime.timerStore.listRecent(params.limit ?? 20)
 						: runtime.timerStore.listActive();
-				const lines = formatTimerRows(timers.map((t) => withLinkedTimeEntryDuration(runtime, t)));
+				const displayTimers = timers.map((t) => withLinkedTimeEntryDuration(runtime, t));
+				const lines = params.state === "recent" ? formatTimerRowsByDate(displayTimers) : formatTimerRows(displayTimers);
 				return textResult(lines.join("\n") || "No timers found.", { timers });
 			},
 		}),

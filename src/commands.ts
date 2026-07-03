@@ -3,17 +3,17 @@ import { getIntervalsHome, loadConfig, resolveCredentials, saveConfig } from "./
 import { syncProjectsCatalog } from "./catalog-sync.js";
 import { splitCommandArgs } from "./command-args.js";
 import { IntervalsApiClient } from "./intervals-api.js";
-import { formatBrightTimer, formatBrightTimerRows, formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport } from "./format.js";
+import { formatBrightTimer, formatBrightTimerRows, formatBrightTimerRowsByDate, formatDuration, formatSyncSummary, formatTimeEntry, formatTimeReport } from "./format.js";
 import { formatEditableLocalId } from "./local-id.js";
 import type { Runtime } from "./runtime.js";
 import { buildStopTimeEditSummary, formatStopTimeEditSummary } from "./time-edit-feedback.js";
 import type { Timer } from "./timer-store.js";
 import type { TimeRange } from "./types.js";
 
-function withLinkedTimeEntryDuration(runtime: Runtime, timer: Timer): Timer & { displayElapsedSeconds?: number; displayStartAt?: string; displayEndAt?: string } {
+function withLinkedTimeEntryDuration(runtime: Runtime, timer: Timer): Timer & { displayElapsedSeconds?: number; displayDate?: string; displayStartAt?: string; displayEndAt?: string } {
   if (timer.state !== "stopped") return timer;
   const entry = runtime.timeEntryStore.findBySourceTimerId(timer.localId);
-  return entry ? { ...timer, displayElapsedSeconds: entry.durationSeconds, displayStartAt: entry.startAt, displayEndAt: entry.endAt } : timer;
+  return entry ? { ...timer, displayElapsedSeconds: entry.durationSeconds, displayDate: entry.date, displayStartAt: entry.startAt, displayEndAt: entry.endAt } : timer;
 }
 
 export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): void {
@@ -233,7 +233,8 @@ export function registerIntervalsCommands(runtime: Runtime, pi: ExtensionAPI): v
         ctx.ui.notify("No timers found.", "info");
         return;
       }
-      const lines = formatBrightTimerRows(timers.map((t) => withLinkedTimeEntryDuration(runtime, t)));
+      const displayTimers = timers.map((t) => withLinkedTimeEntryDuration(runtime, t));
+      const lines = arg === "recent" ? formatBrightTimerRowsByDate(displayTimers) : formatBrightTimerRows(displayTimers);
       ctx.ui.notify(lines.join("\n"), "info");
     },
   });

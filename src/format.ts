@@ -16,6 +16,7 @@ export function formatDuration(totalSeconds: number): string {
 
 type DisplayTimer = Timer & {
   displayElapsedSeconds?: number;
+  displayDate?: string;
   displayStartAt?: string;
   displayEndAt?: string;
 };
@@ -52,12 +53,43 @@ export function formatBrightTimerRows(timers: DisplayTimer[], now = new Date()):
   return formatTimerRowsInternal(timers, now, true);
 }
 
+export function formatTimerRowsByDate(timers: DisplayTimer[], now = new Date()): string[] {
+  return formatTimerRowsByDateInternal(timers, now, false);
+}
+
+export function formatBrightTimerRowsByDate(timers: DisplayTimer[], now = new Date()): string[] {
+  return formatTimerRowsByDateInternal(timers, now, true);
+}
+
 function formatTimerRowsInternal(timers: DisplayTimer[], now: Date, bright: boolean): string[] {
   const parts = timers.map((timer) => getTimerRowParts(timer, now));
   const statusWidth = Math.max("● stopped".length, ...parts.map((p) => p.status.length));
   const windowWidth = Math.max("00:00-00:00".length, ...parts.map((p) => p.window.length));
   const durationWidth = Math.max(0, ...parts.map((p) => p.duration.length));
   return parts.map((part) => formatTimerRow(part, { statusWidth, windowWidth, durationWidth }, bright));
+}
+
+function formatTimerRowsByDateInternal(timers: DisplayTimer[], now: Date, bright: boolean): string[] {
+  const parts = timers.map((timer) => ({ timer, part: getTimerRowParts(timer, now) }));
+  const statusWidth = Math.max("● stopped".length, ...parts.map((p) => p.part.status.length));
+  const windowWidth = Math.max("00:00-00:00".length, ...parts.map((p) => p.part.window.length));
+  const durationWidth = Math.max(0, ...parts.map((p) => p.part.duration.length));
+  const groups = new Map<string, typeof parts>();
+
+  for (const item of parts) {
+    const date = getTimerDate(item.timer);
+    groups.set(date, [...(groups.get(date) ?? []), item]);
+  }
+
+  const lines: string[] = [];
+  for (const [date, group] of groups) {
+    if (lines.length > 0) lines.push("");
+    const totalSeconds = group.reduce((sum, item) => sum + getTimerElapsedSeconds(item.timer, now), 0);
+    lines.push(`${formatTimerDateHeading(date)} · ${formatDuration(totalSeconds)}`);
+    lines.push(...group.map((item) => formatTimerRow(item.part, { statusWidth, windowWidth, durationWidth }, bright)));
+  }
+
+  return lines;
 }
 
 function getTimerRowParts(timer: DisplayTimer, now: Date): TimerRowParts {
@@ -92,6 +124,24 @@ function getTimerWindow(timer: DisplayTimer, now: Date): string {
     : timer.displayEndAt ?? timer.stoppedAt;
   if (!startAt || !endAt) return "";
   return `${formatLocalTimeOfDay(startAt)}-${formatLocalTimeOfDay(endAt)}`;
+}
+
+function getTimerDate(timer: DisplayTimer): string {
+  return timer.displayDate ?? formatLocalDate(timer.startedAt);
+}
+
+function formatLocalDate(value: string | undefined): string {
+  const date = value ? new Date(value) : undefined;
+  if (!date || !Number.isFinite(date.getTime())) return "(unknown date)";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatTimerDateHeading(date: string): string {
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return date;
+  const localDate = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][localDate.getDay()];
+  return `${weekday} ${date}`;
 }
 
 function getTimerElapsedSeconds(timer: DisplayTimer, now: Date): number {
