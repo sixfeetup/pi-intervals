@@ -1,8 +1,38 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-type StatementSyncType = import("node:sqlite").StatementSync;
-type DatabaseSyncInstance = InstanceType<typeof import("node:sqlite").DatabaseSync>;
+type StatementSyncType = {
+  get(...params: unknown[]): unknown;
+  all(...params: unknown[]): unknown[];
+  run(...params: unknown[]): { lastInsertRowid: number | bigint; changes: number };
+};
+
+type DatabaseSyncInstance = {
+  exec(sql: string): void;
+  prepare(sql: string): StatementSyncType;
+  close(): void;
+};
+
+type DatabaseConstructor = new (path: string) => DatabaseSyncInstance;
+type SqliteModule = { DatabaseSync?: DatabaseConstructor; Database?: DatabaseConstructor };
+type ImportModule = (specifier: string) => Promise<SqliteModule>;
+
+const importModule: ImportModule = (specifier) => import(specifier) as Promise<SqliteModule>;
+
+export async function resolveDatabaseConstructor(importer: ImportModule = importModule): Promise<DatabaseConstructor> {
+  try {
+    const nodeSqlite = await importer("node:sqlite");
+    if (nodeSqlite.DatabaseSync) return nodeSqlite.DatabaseSync;
+  } catch (error) {
+    const bunSqlite = await importer("bun:sqlite");
+    if (bunSqlite.Database) return bunSqlite.Database;
+    throw error;
+  }
+
+  const bunSqlite = await importer("bun:sqlite");
+  if (bunSqlite.Database) return bunSqlite.Database;
+  throw new Error("No supported SQLite runtime is available");
+}
 
 // Suppress node:sqlite ExperimentalWarning before first import.
 const originalEmitWarning = process.emitWarning as (...args: unknown[]) => void;
@@ -17,7 +47,7 @@ process.emitWarning = (warning: string | Error, ...args: unknown[]) => {
   originalEmitWarning.call(process, warning, ...args);
 };
 
-const { DatabaseSync } = await import("node:sqlite");
+const DatabaseSync = await resolveDatabaseConstructor();
 
 export interface RunResult {
   lastInsertRowid: number;
@@ -81,15 +111,15 @@ class StatementCompat implements Statement {
   constructor(private stmt: StatementSyncType) {}
 
   get<T = unknown>(...params: unknown[]): T | undefined {
-    return this.stmt.get(...(params as import("node:sqlite").SQLInputValue[])) as T | undefined;
+    return this.stmt.get(...params) as T | undefined;
   }
 
   all<T = unknown>(...params: unknown[]): T[] {
-    return this.stmt.all(...(params as import("node:sqlite").SQLInputValue[])) as T[];
+    return this.stmt.all(...params) as T[];
   }
 
   run(...params: unknown[]): RunResult {
-    const result = this.stmt.run(...(params as import("node:sqlite").SQLInputValue[]));
+    const result = this.stmt.run(...params);
     return {
       lastInsertRowid: Number(result.lastInsertRowid),
       changes: Number(result.changes),

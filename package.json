@@ -10,7 +10,8 @@
   "scripts": {
     "test": "tsx --test tests/**/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "test:bun-load": "bun -e \"await import('./src/index.ts'); console.log('loaded')\""
   },
   "pi": {
     "extensions": ["./src/index.ts"]
