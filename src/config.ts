@@ -18,7 +18,19 @@ export interface ResolvedCredentials {
 }
 
 export function getIntervalsHome(env: NodeJS.ProcessEnv = process.env): string {
-  return resolve(env.PI_INTERVALS_HOME || join(homedir(), ".pi", "intervals"));
+  if (env.PI_INTERVALS_HOME) return resolve(env.PI_INTERVALS_HOME);
+  // Keep local data with the rest of Pi's state when a launcher, such as a
+  // sandbox, selects another agent directory.
+  const agentDir = env.PI_CODING_AGENT_DIR;
+  if (agentDir) return resolve(expandTilde(agentDir), "intervals");
+  return join(homedir(), ".pi", "intervals");
+}
+
+// Matches how Pi expands PI_CODING_AGENT_DIR.
+function expandTilde(path: string): string {
+  if (path === "~") return homedir();
+  if (path.startsWith("~/")) return join(homedir(), path.slice(2));
+  return path;
 }
 
 export function configPath(home: string): string {

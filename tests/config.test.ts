@@ -1,12 +1,30 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { getIntervalsHome, loadConfig, resolveCredentials } from "../src/config.js";
 
 test("getIntervalsHome uses PI_INTERVALS_HOME when present", () => {
   const home = getIntervalsHome({ PI_INTERVALS_HOME: "/tmp/pi-intervals-test" });
+  assert.equal(home, "/tmp/pi-intervals-test");
+});
+
+test("getIntervalsHome defaults to ~/.pi/intervals", () => {
+  assert.equal(getIntervalsHome({}), join(homedir(), ".pi", "intervals"));
+});
+
+test("getIntervalsHome stores data in the selected Pi agent directory", () => {
+  assert.equal(getIntervalsHome({ PI_CODING_AGENT_DIR: "/srv/pi-agent" }), "/srv/pi-agent/intervals");
+});
+
+test("getIntervalsHome expands a tilde in the Pi agent directory as Pi does", () => {
+  assert.equal(getIntervalsHome({ PI_CODING_AGENT_DIR: "~/agent" }), join(homedir(), "agent", "intervals"));
+  assert.equal(getIntervalsHome({ PI_CODING_AGENT_DIR: "~" }), join(homedir(), "intervals"));
+});
+
+test("getIntervalsHome prefers PI_INTERVALS_HOME over the Pi agent directory", () => {
+  const home = getIntervalsHome({ PI_INTERVALS_HOME: "/tmp/pi-intervals-test", PI_CODING_AGENT_DIR: "/srv/pi-agent" });
   assert.equal(home, "/tmp/pi-intervals-test");
 });
 

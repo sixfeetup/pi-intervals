@@ -123,7 +123,7 @@ For retroactive entries, resolve required project/worktype before creating the e
 - Use `intervals_delete_time` when the user wants to remove a time entry. If the user references a stopped timer, pass `timer_id` so the linked time entry is deleted.
 - Use `intervals_sync_now` after adding/editing/stopping if the tool did not already sync, or when the user explicitly asks to retry sync.
 - Use `intervals_find_project_context` before relying on a project/worktype/module ID that came from text rather than a previous time entry.
-- Do not read `~/.pi/intervals/intervals.db` directly for normal workflows. Use `intervals_list_time`, `intervals_query_time`, and `intervals_lookup_time_entry`; these expose local time entry IDs, local start/end windows, sync status, and timer-to-entry mapping without direct DB access.
+- Do not read the local `intervals.db` directly for normal workflows. Use `intervals_list_time`, `intervals_query_time`, and `intervals_lookup_time_entry`; these expose local time entry IDs, local start/end windows, sync status, and timer-to-entry mapping without direct DB access.
 - When the user asks to change an entry's stop/end time using a bare time like `08:35`, use `stop_time` instead of raw `end_at`. `stop_time` is interpreted as local time and recalculates duration from the entry's stored start time.
 - If the user gives a stopped timer ID when editing a derived time entry, use `intervals_lookup_time_entry(timer_id=...)` or `intervals_edit_time(timer_id=...)`; do not map the timer to a time entry through SQLite.
 

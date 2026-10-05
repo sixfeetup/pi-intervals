@@ -22,7 +22,7 @@ credentials and sync the project catalog.
 Credentials and settings are resolved in this order:
 
 1. Environment variables
-2. `config.json` inside `PI_INTERVALS_HOME` (or `~/.pi/intervals/`)
+2. `config.json` inside the local storage directory (see below)
 
 ### Environment variables
 
@@ -31,11 +31,21 @@ Credentials and settings are resolved in this order:
 | `INTERVALS_API_KEY`   | Intervals API key for HTTP Basic auth                            |
 | `INTERVALS_BASE_URL`  | Intervals API base URL (default: `https://api.myintervals.com/`) |
 | `INTERVALS_PERSON_ID` | Your Intervals person ID (required for time-entry sync)          |
-| `PI_INTERVALS_HOME`   | Override the default local storage path (`~/.pi/intervals/`)     |
+| `PI_INTERVALS_HOME`   | Override the local storage directory                             |
+
+### Local storage directory
+
+The extension keeps `config.json` and its SQLite database in one directory:
+
+1. `PI_INTERVALS_HOME`, when set.
+2. `intervals/` inside Pi's agent directory, when `PI_CODING_AGENT_DIR` is set.
+3. `~/.pi/intervals/` otherwise.
+
+A launcher or sandbox that selects its own Pi agent directory therefore gets its own Intervals data.
 
 ### `config.json` keys
 
-If you prefer file-based configuration, create `config.json` inside `PI_INTERVALS_HOME` (or `~/.pi/intervals/`):
+If you prefer file-based configuration, create `config.json` inside the local storage directory:
 
 | Key              | Type     | Description                                                      |
 | ---------------- | -------- | ---------------------------------------------------------------- |
